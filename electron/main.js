@@ -512,7 +512,7 @@ ipcMain.handle('cmd:exec', async (_event, command, cwd) => {
     return { ok: false, error: 'Command rejected: empty command' };
   }
   // Validate cwd against project root
-  const effectiveCwd = cwd || rootDir;
+  const effectiveCwd = cwd || projectRoot || rootDir;
   if (!validatePath(effectiveCwd)) {
     return { ok: false, error: 'Command rejected: cwd outside project root' };
   }
