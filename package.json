@@ -1,0 +1,33 @@
+{
+  "name": "my-ide",
+  "version": "0.1.0",
+  "description": "AI-powered desktop IDE with configurable providers",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron electron/main.js",
+    "dev": "esbuild src/index.js --bundle --outfile=src/bundle.js --format=iife --platform=browser && npm start",
+    "build": "electron-builder",
+    "build:renderer": "esbuild src/index.js --bundle --outfile=src/bundle.js --format=iife --platform=browser --minify"
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6.10.3",
+    "@codemirror/lang-css": "^6.3.1",
+    "@codemirror/lang-html": "^6.4.11",
+    "@codemirror/lang-javascript": "^6.2.5",
+    "@codemirror/lang-json": "^6.0.2",
+    "@codemirror/lang-python": "^6.2.1",
+    "@codemirror/language": "^6.12.3",
+    "@codemirror/lint": "^6.9.5",
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/theme-one-dark": "^6.1.3",
+    "@codemirror/view": "^6.41.0",
+    "codemirror": "^6.0.2",
+    "highlight.js": "^11.10.0",
+    "marked": "^14.1.3"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "esbuild": "^0.28.0"
+  }
+}

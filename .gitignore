@@ -1,0 +1,12 @@
+node_modules/
+config/settings.json
+dist/
+out/
+.DS_Store
+Thumbs.db
+.env
+.env.*
+*.log
+coverage/
+*.tgz
+*.zip

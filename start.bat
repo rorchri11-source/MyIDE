@@ -1,0 +1,9 @@
+@echo off
+echo  [MyIDE] Avvio in corso...
+cd /d "%~dp0"
+if not exist node_modules (
+  echo  Installazione dipendenze...
+  call npm install
+)
+echo  Avvio MyIDE...
+call npx electron electron/main.js
