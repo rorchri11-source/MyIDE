@@ -7,7 +7,8 @@
     "start": "electron electron/main.js",
     "dev": "esbuild src/index.js --bundle --outfile=src/bundle.js --format=iife --platform=browser && npm start",
     "build": "electron-builder",
-    "build:renderer": "esbuild src/index.js --bundle --outfile=src/bundle.js --format=iife --platform=browser --minify"
+    "build:renderer": "esbuild src/index.js --bundle --outfile=src/bundle.js --format=iife --platform=browser --minify",
+    "test": "node --test src/**/*.test.js"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.3",
