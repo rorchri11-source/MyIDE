@@ -96,7 +96,7 @@ export default class ChatUI {
     const icons = { fs_read: '📖', fs_write: '✏️', cmd_run: '⚡' };
     const msgEl = document.createElement('div');
     msgEl.className = 'message system tool-call-msg';
-    msgEl.innerHTML = `<div class="tool-call-display"><span class="tool-call-icon">${icons[toolName] || '🔧'}</span> <strong>${toolName}</strong><br/><span class="tool-call-args">${escapeHtml(JSON.stringify(args, null, 2))}</span></div>`;
+    msgEl.innerHTML = `<div class="tool-call-display"><span class="tool-call-icon">${icons[toolName] || '🔧'}</span> <strong>${escapeHtml(toolName)}</strong><br/><span class="tool-call-args">${escapeHtml(JSON.stringify(args, null, 2))}</span></div>`;
     this.messagesEl.appendChild(msgEl);
     msgEl.scrollIntoView({ behavior: 'smooth' });
   }
@@ -106,7 +106,7 @@ export default class ChatUI {
     const msgEl = document.createElement('div');
     msgEl.className = 'message system tool-result-msg';
     const preview = (result.output || result.message || '').slice(0, 200);
-    msgEl.innerHTML = `<div style="color: ${result.error ? 'var(--red-light)' : 'var(--text-muted)'}; font-size: 12px;"><strong>→ ${toolName}:</strong> ${result.error ? 'Errore: ' + escapeHtml(String(result.error)) : escapeHtml(preview)}</div>`;
+    msgEl.innerHTML = `<div style="color: ${result.error ? 'var(--red-light)' : 'var(--text-muted)'}; font-size: 12px;"><strong>→ ${escapeHtml(toolName)}:</strong> ${result.error ? 'Errore: ' + escapeHtml(String(result.error)) : escapeHtml(preview)}</div>`;
     this.messagesEl.appendChild(msgEl);
     msgEl.scrollIntoView({ behavior: 'smooth' });
   }
@@ -120,8 +120,8 @@ export default class ChatUI {
         <strong>⚠️ Conferma tool:</strong> <code>${escapeHtml(fnName)}</code>
         <pre style="font-size: 11px; margin: 4px 0; max-height: 120px; overflow: auto;">${escapeHtml(JSON.stringify(args, null, 2))}</pre>
         <div style="display: flex; gap: 6px; margin-top: 6px;">
-          <button class="confirm-allow-btn" data-id="${id}">✔ Esegui</button>
-          <button class="confirm-deny-btn" data-id="${id}">✖ Annulla</button>
+          <button class="confirm-allow-btn" data-id="${escapeHtml(id)}">✔ Esegui</button>
+          <button class="confirm-deny-btn" data-id="${escapeHtml(id)}">✖ Annulla</button>
         </div>
       </div>`;
     this.messagesEl.appendChild(msgEl);

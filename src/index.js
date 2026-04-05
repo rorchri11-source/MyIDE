@@ -408,7 +408,7 @@ class App {
           <div class="provider-name">${this._esc(config.name || id)}</div>
           <div class="provider-model">${this._esc(config.command + ' ' + (config.args || []).join(' '))}</div>
         </div>
-        <button class="btn-small mcp-remove-btn" data-mcp-id="${id}">Remove</button>
+        <button class="btn-small mcp-remove-btn" data-mcp-id="${this._esc(id)}">Remove</button>
       `;
       item.querySelector('.mcp-remove-btn').addEventListener('click', async (e) => {
         e.stopPropagation();
