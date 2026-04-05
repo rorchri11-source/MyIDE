@@ -75,7 +75,7 @@ function validatePath(filePath) {
   // Use path.relative to prevent prefix-matching attacks
   // e.g. projectRoot="C:\proj" vs resolved="C:\proj-evil"
   const relative = path.relative(canonicalRoot, canonical);
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+  return relative === '' || (!relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative));
 }
 
 function createPathValidator(label) {
