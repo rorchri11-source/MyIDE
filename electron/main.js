@@ -210,9 +210,10 @@ function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
         let errorBody = '';
 
         res.on('data', (chunk) => {
-          errorBody += chunk;
-
-          if (res.statusCode < 200 || res.statusCode >= 300) return;
+          if (res.statusCode < 200 || res.statusCode >= 300) {
+            errorBody += chunk;
+            return;
+          }
 
           sseBuffer += chunk;
 
@@ -256,8 +257,10 @@ function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
                 } catch (e) { /* skip */ }
               }
             }
+            resolve({ requestId, statusCode: res.statusCode, body: '', headers: res.headers });
+          } else {
+            resolve({ requestId, statusCode: res.statusCode, body: errorBody, headers: res.headers });
           }
-          resolve({ requestId, statusCode: res.statusCode, body: errorBody, headers: res.headers });
         });
       } else {
         // Non-streaming path: buffer full body (for ai:sendWithTools)
@@ -357,7 +360,7 @@ ipcMain.handle('ai:sendWithTools', async (event, { config, messages, tools }) =>
   return { error: 'Max retries exceeded' };
 });
 
-ipcMain.handle('ai:send', async (event, { config, messages }) => {
+ipcMain.handle('ai:send', async (event, { config, messages, streamId }) => {
   if (isAIRateLimited()) {
     return { error: 'AI request rejected: rate limit exceeded (10/min)' };
   }
@@ -399,7 +402,7 @@ ipcMain.handle('ai:send', async (event, { config, messages }) => {
     const onSseChunk = (delta, full) => {
       accumulatedContent = full;
       if (event.sender && !event.sender.isDestroyed()) {
-        event.sender.send('ai:chunk', { content: delta });
+        event.sender.send('ai:chunk', { content: delta, streamId });
       }
     };
 

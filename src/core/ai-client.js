@@ -15,13 +15,13 @@ function validateConfig(config) {
 export default class AIClient {
   constructor(providerConfig) {
     this.config = providerConfig;
-    this._pendingRequest = null; // { content, onChunk, resolve, reject }
+    this._pendingRequest = null; // { content, onChunk, resolve, reject, streamId }
     this._listenerId = null; // ID of the registered ai:chunk listener
 
     // Listen for streaming chunks — route to active request
     if (window.api && window.api.onAiChunk) {
       this._listenerId = window.api.onAiChunk((data) => {
-        if (data.content && this._pendingRequest) {
+        if (data.content && this._pendingRequest && data.streamId === this._pendingRequest.streamId) {
           this._pendingRequest.content += data.content;
           if (this._pendingRequest.onChunk) {
             this._pendingRequest.onChunk(data.content, this._pendingRequest.content);
@@ -42,11 +42,12 @@ export default class AIClient {
       throw new Error('Richiesta AI gia in corso. Completa o annulla la richiesta prima di inviarne una nuova.');
     }
 
-    const req = { content: '', onChunk };
+    const streamId = 'stream_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    const req = { content: '', onChunk, streamId };
     this._pendingRequest = req;
 
     try {
-      const result = await window.api.aiSend(this.config, messages);
+      const result = await window.api.aiSend(this.config, messages, streamId);
 
       if (result.error) {
         throw new Error(result.error);
