@@ -307,6 +307,9 @@ ${toolsHint}
       }
       case 'cmd_run': {
         const result = await window.api.execCommand(args.command, args.cwd);
+        if (!result.ok && result.error) {
+          return { error: result.error };
+        }
         const output = [result.stdout, result.stderr].filter(Boolean).join('\n') || '(nessun output)';
         const MAX_OUTPUT = 200000;
         const truncated = output.length > MAX_OUTPUT

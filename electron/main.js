@@ -472,7 +472,7 @@ function isCommandRateLimited() {
   const now = Date.now();
   const windowMs = 60_000;
   while (cmdTimestamps.length && cmdTimestamps[0] < now - windowMs) cmdTimestamps.shift();
-  if (cmdTimestamps.length >= 5) return true;
+  if (cmdTimestamps.length >= 60) return true;
   cmdTimestamps.push(now);
   return false;
 }
@@ -501,32 +501,29 @@ ipcMain.handle('ai:cancel', async (_event, requestId) => {
 
 ipcMain.handle('cmd:exec', async (_event, command, cwd) => {
   // Block shell metacharacters that allow command chaining, piping, subshell, globbing
-  if (/[;|&$`<>\\(){}!\[\]*?~%\^'"\n\r]/.test(command)) {
+  if (/[;|&$`<>\\(){}!\[\]*?~%\^\n\r]/.test(command)) {
     return { ok: false, error: 'Command rejected: invalid characters not allowed' };
   }
   if (isCommandRateLimited()) {
-    return { ok: false, error: 'Command rejected: rate limit exceeded (5/min)' };
+    return { ok: false, error: 'Command rejected: rate limit exceeded (60/min)' };
   }
-  // Parse executable + args from the command string
-  const tokens = command.trim().split(/\s+/).filter(Boolean);
-  if (tokens.length === 0) {
+  const trimmed = command.trim();
+  if (!trimmed) {
     return { ok: false, error: 'Command rejected: empty command' };
   }
-  const exe = tokens[0];
-  const args = tokens.slice(1);
   // Validate cwd against project root
   const effectiveCwd = cwd || rootDir;
   if (!validatePath(effectiveCwd)) {
     return { ok: false, error: 'Command rejected: cwd outside project root' };
   }
   return new Promise((resolve) => {
-    const child = spawn(exe, args, { cwd: effectiveCwd, timeout: 30000 });
+    const child = spawn(trimmed, [], { cwd: effectiveCwd, timeout: 30000, shell: true });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', d => { stdout += d.toString(); });
     child.stderr.on('data', d => { stderr += d.toString(); });
     child.on('error', (err) => {
-      resolve({ ok: false, stdout, stderr, exitCode: 1 });
+      resolve({ ok: false, stdout, stderr, exitCode: 1, error: err.message });
     });
     child.on('close', (code) => {
       resolve({
