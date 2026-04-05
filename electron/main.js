@@ -513,6 +513,13 @@ ipcMain.handle('cmd:exec', async (_event, command, cwd) => {
     return { ok: false, error: 'Command rejected: empty command' };
   }
   const exe = tokens[0];
+
+  const ALLOWED_COMMANDS = ['npm', 'node', 'ls', 'esbuild', 'electron', 'electron-builder'];
+  const baseExe = path.basename(exe);
+
+  if (!ALLOWED_COMMANDS.includes(baseExe)) {
+    return { ok: false, error: `Command rejected: executable '${baseExe}' is not in the allowlist` };
+  }
   const args = tokens.slice(1);
   // Validate cwd against project root
   const effectiveCwd = cwd || rootDir;
