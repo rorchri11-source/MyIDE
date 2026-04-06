@@ -288,11 +288,16 @@ function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
   return new Promise((resolve) => {
     const parsedUrl = new URL(url);
 
+    if (net.isIP(parsedUrl.hostname) && isPrivateIP(parsedUrl.hostname)) {
+      return resolve({ requestId, statusCode: 0, body: '', error: `SSRF Protection: Access to internal IP ${parsedUrl.hostname} is blocked.` });
+    }
+
     const req = client.request({
       hostname: parsedUrl.hostname,
       port: parsedUrl.port || (isHttps ? 443 : 80),
       path: parsedUrl.pathname + parsedUrl.search,
       method: 'POST',
+      lookup: safeLookup,
       headers: {
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(body),

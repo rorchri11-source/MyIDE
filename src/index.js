@@ -103,6 +103,9 @@ class App {
       this.fileTree = new FileTree(async (filePath) => {
         if (this.editor) await this.editor.openFile(filePath);
       });
+      this.editor.onTabChange = (filePath) => {
+        if (this.fileTree) this.fileTree.setActiveFile(filePath);
+      };
       this.chat = new ChatUI(this.settings);
       this.modeManager = new ModeManager(this.settings, this.editor, this.chat);
       this.chat.setModeManager(this.modeManager);

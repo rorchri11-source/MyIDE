@@ -96,37 +96,7 @@ Explanation: Changed greet to return instead of console.log, added farewell func
       if (typingEl && typingEl.parentNode) typingEl.parentNode.removeChild(typingEl);
 
       const finalText = fullResponse || accumulatedText;
-
-      // Enforce reasoning: auto-retry se il reasoning manca in edit mode (se supportato da modeManager)
-      let finalResponseChecked = finalText;
-      if (this.modeManager && !this.modeManager.validateReasoning(finalText)) {
-        let reasoningRetries = 0;
-        const maxRetries = this.modeManager?.maxReasoningRetries ?? 2;
-
-        while (reasoningRetries < maxRetries) {
-          reasoningRetries++;
-          this.chat.setLoading(true, `🔄 Reasoning mancante — reinvio (${reasoningRetries}/${maxRetries})...`);
-
-          const correction = this.modeManager.buildReasoningCorrection();
-          const retryMessages = [
-            ...messages,
-            { role: 'assistant', content: finalResponseChecked },
-            correction
-          ];
-
-          const retryResult = await client.send(retryMessages, (chunk, full) => {
-             accumulatedText = full;
-             this.chat.updateMessageStreaming(assistantEl, full);
-          });
-
-          finalResponseChecked = retryResult || accumulatedText;
-          if (this.modeManager.validateReasoning(finalResponseChecked)) {
-            break;
-          }
-        }
-      }
-
-      this.finalizeResponse(assistantEl, finalResponseChecked, fileSnapshot);
+      this.finalizeResponse(assistantEl, finalText, fileSnapshot);
     } catch (error) {
       console.error('Edit mode error:', error);
       this.chat.addMessage('system', `Error: ${error.message}`);
