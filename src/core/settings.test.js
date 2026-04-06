@@ -65,4 +65,39 @@ test('deepMergeDefaults', async (t) => {
     const result = deepMergeDefaults(raw, defaults);
     assert.deepStrictEqual(result, { config: { a: 1 } });
   });
+
+  await t.test('deeply nested objects (3+ levels)', () => {
+    const raw = { level1: { level2: { level3: { a: 1 } } } };
+    const defaults = { level1: { level2: { level3: { b: 2 }, c: 3 } } };
+    const result = deepMergeDefaults(raw, defaults);
+    assert.deepStrictEqual(result, { level1: { level2: { level3: { a: 1, b: 2 }, c: 3 } } });
+  });
+
+  await t.test('handles raw property as undefined', () => {
+    const raw = { config: undefined };
+    const defaults = { config: { a: 1 } };
+    const result = deepMergeDefaults(raw, defaults);
+    assert.deepStrictEqual(result, { config: undefined });
+  });
+
+  await t.test('both raw and defaults are empty objects', () => {
+    const raw = {};
+    const defaults = {};
+    const result = deepMergeDefaults(raw, defaults);
+    assert.deepStrictEqual(result, {});
+  });
+
+  await t.test('raw has object and defaults has array', () => {
+    const raw = { data: { a: 1 } };
+    const defaults = { data: [1, 2, 3] };
+    const result = deepMergeDefaults(raw, defaults);
+    assert.deepStrictEqual(result, { data: { a: 1 } });
+  });
+
+  await t.test('raw has extra deep properties not in defaults', () => {
+    const raw = { settings: { theme: 'dark', extra: { custom: true } } };
+    const defaults = { settings: { theme: 'light' } };
+    const result = deepMergeDefaults(raw, defaults);
+    assert.deepStrictEqual(result, { settings: { theme: 'dark', extra: { custom: true } } });
+  });
 });
