@@ -32,12 +32,13 @@ export default class TerminalUI {
     `;
 
     // Add the panel to the document
-    const mainContent = document.getElementById('main-content');
-    if (!mainContent) {
-      console.error('TerminalUI: #main-content element not found');
+    const appEl = document.getElementById('app');
+    const bottomBar = document.getElementById('bottombar');
+    if (!appEl || !bottomBar) {
+      console.error('TerminalUI: #app or #bottombar element not found');
       return;
     }
-    mainContent.appendChild(container);
+    appEl.insertBefore(container, bottomBar);
 
     this.container = container;
     this.outputEl = container.querySelector('#terminal-output');

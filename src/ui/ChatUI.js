@@ -106,7 +106,7 @@ export default class ChatUI {
     const msgEl = document.createElement('div');
     msgEl.className = 'message system tool-result-msg';
     const preview = (result.output || result.message || '').slice(0, 200);
-    msgEl.innerHTML = `<div style="color: ${result.error ? 'var(--red-light)' : 'var(--text-muted)'}; font-size: 12px;"><strong>→ ${escapeHtml(toolName)}:</strong> ${result.error ? 'Errore: ' + escapeHtml(String(result.error)) : escapeHtml(preview)}</div>`;
+    msgEl.innerHTML = `<div style="color: ${result.error ? 'var(--red-light)' : 'var(--text-muted)'}; font-size: 12px;"><strong>→ ${escapeHtml(toolName)}:</strong> ${result.error ? 'Error: ' + escapeHtml(String(result.error)) : escapeHtml(preview)}</div>`;
     this.messagesEl.appendChild(msgEl);
     msgEl.scrollIntoView({ behavior: 'smooth' });
   }
@@ -156,7 +156,7 @@ export default class ChatUI {
 
   /**
    * Durante lo streaming usa textContent (sicuro, nessun crash).
-   * Solo al termine renderizza il markdown completo.
+   * Only renders the full markdown at the end.
    */
   updateMessageStreaming(msgEl, text) {
     try {
@@ -286,11 +286,11 @@ export default class ChatUI {
 
       msgEl.querySelector('.file-apply-btn').addEventListener('click', async () => {
         await this.writeFile(filePath, content);
-        msgEl.innerHTML = `<span style="color: var(--green);">File creato: ${escapeHtml(filePath)}</span>`;
+        msgEl.innerHTML = `<span style="color: var(--green);">File created: ${escapeHtml(filePath)}</span>`;
       });
 
       msgEl.querySelector('.file-discard-btn').addEventListener('click', () => {
-        msgEl.innerHTML = `<span style="color: var(--text-muted);">File ignorato: ${escapeHtml(filePath)}</span>`;
+        msgEl.innerHTML = `<span style="color: var(--text-muted);">File ignored: ${escapeHtml(filePath)}</span>`;
       });
 
       this.messagesEl.appendChild(msgEl);
@@ -308,7 +308,7 @@ export default class ChatUI {
         this.onFileCreatedCallback(filePath, content);
       }
     } catch (e) {
-      this.addMessage('system', `Errore scrittura file: ${e.message}`);
+      this.addMessage('system', `Error writing file: ${e.message}`);
     }
   }
 
@@ -343,6 +343,8 @@ export default class ChatUI {
     const typingEl = createTypingIndicator();
     this.messagesEl.appendChild(typingEl);
     typingEl.scrollIntoView({ behavior: 'smooth' });
+
+    let assistantEl = null;
 
     try {
       await this.ensureClient();
@@ -384,7 +386,7 @@ export default class ChatUI {
 
       // Remove typing indicator and add real message
       typingEl.remove();
-      const assistantEl = this.addMessage('assistant', '');
+      assistantEl = this.addMessage('assistant', '');
       assistantEl.style.border = '1px solid rgba(129, 140, 248, 0.15)';
       let accumulatedText = '';
 
@@ -400,32 +402,43 @@ export default class ChatUI {
 
       if (this.modeManager && !this.modeManager.validateReasoning(finalResponse)) {
         assistantEl.remove();
-        this.chatHistory.pop(); // rimuovi risposta senza reasoning
 
         while (reasoningRetries < maxRetries) {
           reasoningRetries++;
-          this.setLoading(true, `🔄 Reasoning mancante — reinvio (${reasoningRetries}/${maxRetries})...`);
+          this.setLoading(true, `🔄 Missing reasoning — resending (${reasoningRetries}/${maxRetries})...`);
 
-          // Aggiungi messaggio di correzione alla history
           const correction = this.modeManager.buildReasoningCorrection();
-          this.chatHistory.push(correction);
+          const retryMessages = [
+            ...messages,
+            { role: 'assistant', content: finalResponse },
+            correction
+          ];
 
-          const retryMessages = [...messages, ...this.chatHistory];
+          const retryAssistantEl = this.addMessage('assistant', '');
+          retryAssistantEl.style.border = '1px solid rgba(129, 140, 248, 0.15)';
+
           const retryResult = await this.client.send(retryMessages, (chunk, full) => {
             accumulatedText = full;
-            this.updateMessageStreaming(assistantEl, full);
+            this.updateMessageStreaming(retryAssistantEl, full);
           });
 
           finalResponse = retryResult || accumulatedText;
 
           if (this.modeManager.validateReasoning(finalResponse)) {
+            assistantEl = retryAssistantEl;
             break; // Reasoning OK, esci dal loop
           }
 
           // Se ancora non ha reasoning, rimuovi e riprova
-          assistantEl.remove();
-          this.chatHistory.pop(); // rimuovi correzione
-          this.chatHistory.pop(); // rimuovi risposta senza reasoning
+          retryAssistantEl.remove();
+        }
+
+        // Se alla fine ha fallito tutte le retry e assistantEl è stato rimosso,
+        // creane uno nuovo per mostrare comunque l'ultima risposta (anche se senza reasoning).
+        if (!this.modeManager.validateReasoning(finalResponse)) {
+           assistantEl = this.addMessage('assistant', '');
+           assistantEl.style.border = '1px solid rgba(129, 140, 248, 0.15)';
+           this.updateMessageStreaming(assistantEl, finalResponse);
         }
       }
 
@@ -448,7 +461,7 @@ export default class ChatUI {
       await this.detectAndCreateFiles(finalResponse);
 
     } catch (error) {
-      typingEl.remove();
+      if (typingEl && typingEl.parentNode) typingEl.remove();
       if (assistantEl && !assistantEl.textContent.trim()) {
         assistantEl.remove();
       }
@@ -460,7 +473,7 @@ export default class ChatUI {
 
   handleError(error) {
     console.error('Chat error:', error);
-    this.addMessage('system', `Errore: ${error.message || 'Errore sconosciuto'}`);
+    this.addMessage('system', `Error: ${error.message || 'Unknown error'}`);
     this.setLoading(false);
   }
 
@@ -569,7 +582,7 @@ export default class ChatUI {
     a.download = `myide-chat-${timestamp}.md`;
     a.click();
     URL.revokeObjectURL(url);
-    this.showToast('Chat esportata!', 'success');
+    this.showToast('Chat exported!', 'success');
   }
 
   saveChatSessions(sessions) {
@@ -613,7 +626,7 @@ export default class ChatUI {
     const sessions = this.loadChatSessions();
     sessions.splice(index, 1);
     this.saveChatSessions(sessions);
-    this.showToast('Sessione eliminata', 'info');
+    this.showToast('Session deleted', 'info');
   }
 
   _bindSessionListEvents(msgEl, sessions) {
@@ -622,7 +635,7 @@ export default class ChatUI {
         if (!e.target.classList.contains('chat-session-delete')) {
           const idx = el.dataset.index;
           this.loadChatSession(parseInt(idx));
-          msgEl.innerHTML = `<span style="color: var(--green);">Sessione caricata: ${escapeHtml(sessions[idx].name)}</span>`;
+          msgEl.innerHTML = `<span style="color: var(--green);">Session loaded: ${escapeHtml(sessions[idx].name)}</span>`;
         }
       });
       el.querySelector('.chat-session-delete').addEventListener('click', (e) => {
@@ -632,7 +645,7 @@ export default class ChatUI {
         // Re-render the session list to update all indices
         const updatedSessions = this.loadChatSessions();
         if (updatedSessions.length === 0) {
-          msgEl.innerHTML = '<span style="color: var(--text-muted);">Nessuna sessione salvata</span>';
+          msgEl.innerHTML = '<span style="color: var(--text-muted);">No saved sessions</span>';
         } else {
           let html = '<div style="padding: 4px 0;"><strong>Chat History</strong></div>';
           updatedSessions.forEach((s, i) => {
@@ -648,7 +661,7 @@ export default class ChatUI {
   showChatHistory() {
     const sessions = this.loadChatSessions();
     if (sessions.length === 0) {
-      this.showToast('Nessuna sessione salvata', 'info');
+      this.showToast('No saved sessions', 'info');
       return;
     }
 

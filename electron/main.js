@@ -74,10 +74,12 @@ function validatePath(filePath) {
   } catch (e) {
     return false; // project root doesn't exist (anymore), deny all access
   }
-  // Use path.relative to prevent prefix-matching attacks
-  // e.g. projectRoot="C:\proj" vs resolved="C:\proj-evil"
+
   const relative = path.relative(canonicalRoot, canonical);
-  return relative === '' || (!relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative));
+  // Security: Prevent path traversal out of the project root.
+  // Using path.relative avoids prefix-matching attacks (e.g. projectRoot="C:\proj" vs resolved="C:\proj-evil" -> relative="..\proj-evil").
+  const isInside = !relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative);
+  return relative === '' || isInside;
 }
 
 function createPathValidator(label) {
@@ -198,98 +200,20 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function isPrivateIP(ip) {
-  if (net.isIPv4(ip)) {
-    const parts = ip.split('.').map(Number);
-    return (
-      parts[0] === 127 ||
-      parts[0] === 10 ||
-      (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
-      (parts[0] === 192 && parts[1] === 168) ||
-      (parts[0] === 169 && parts[1] === 254) ||
-      parts[0] === 0 ||
-      (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127) ||
-      (parts[0] === 192 && parts[1] === 0 && parts[2] === 0) ||
-      (parts[0] === 192 && parts[1] === 0 && parts[2] === 2) ||
-      (parts[0] === 198 && parts[1] >= 18 && parts[1] <= 19) ||
-      (parts[0] === 198 && parts[1] === 51 && parts[2] === 100) ||
-      (parts[0] === 203 && parts[1] === 0 && parts[2] === 113) ||
-      parts[0] >= 224
-    );
-  } else if (net.isIPv6(ip)) {
-    // Handle IPv4-mapped IPv6 addresses (e.g., ::ffff:127.0.0.1)
-    if (ip.toLowerCase().startsWith('::ffff:')) {
-      const ipv4Part = ip.substring(7);
-      if (net.isIPv4(ipv4Part)) {
-        return isPrivateIP(ipv4Part);
-      }
-    }
-    return (
-      ip === '::1' ||
-      ip === '::' ||
-      ip.toLowerCase().startsWith('fd') ||
-      ip.toLowerCase().startsWith('fc') ||
-      ip.toLowerCase().startsWith('fe8') ||
-      ip.toLowerCase().startsWith('fe9') ||
-      ip.toLowerCase().startsWith('fea') ||
-      ip.toLowerCase().startsWith('feb') ||
-      ip.toLowerCase().startsWith('ff')
-    );
-  }
-  return false;
-}
-
-function safeLookup(hostname, options, callback) {
-  if (typeof options === 'function') {
-    callback = options;
-    options = {};
-  }
-  dns.lookup(hostname, options, (err, address, family) => {
-    if (err) return callback(err);
-    if (Array.isArray(address)) {
-      for (const addr of address) {
-        if (isPrivateIP(addr.address)) {
-          return callback(new Error(`SSRF Protection: Access to internal IP ${addr.address} is blocked.`));
-        }
-      }
-    } else {
-      if (isPrivateIP(address)) {
-        return callback(new Error(`SSRF Protection: Access to internal IP ${address} is blocked.`));
-      }
-    }
-    callback(null, address, family);
-  });
-}
-
 function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
   const requestId = ++_nextRequestId;
   return new Promise((resolve) => {
     const parsedUrl = new URL(url);
 
-    if (net.isIP(parsedUrl.hostname) && isPrivateIP(parsedUrl.hostname)) {
-      return resolve({ requestId, statusCode: 0, body: '', error: `SSRF Protection: Access to internal IP ${parsedUrl.hostname} is blocked.` });
-    }
-
-    safeLookup(parsedUrl.hostname, { all: false }, (err, address, family) => {
-      if (err) {
-        return resolve({ requestId, statusCode: 0, body: '', error: `DNS lookup failed: ${err.message}` });
-      }
-
-      const reqOptions = {
-        hostname: address,
-        port: parsedUrl.port || (isHttps ? 443 : 80),
-        path: parsedUrl.pathname + parsedUrl.search,
-        method: 'POST',
-        headers: {
-          'Host': parsedUrl.hostname,
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(body),
-          'Authorization': authHeader
-        }
-      };
-
-      if (isHttps) {
-        reqOptions.servername = parsedUrl.hostname;
+    const req = client.request({
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || (isHttps ? 443 : 80),
+      path: parsedUrl.pathname + parsedUrl.search,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+        'Authorization': authHeader
       }
 
       const req = client.request(reqOptions, (res) => {
@@ -300,6 +224,8 @@ function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
         let fullContent = '';
         let lineStart = 0;
         let errorBody = '';
+
+        let inThinking = false;
 
         res.on('data', (chunk) => {
           if (res.statusCode < 200 || res.statusCode >= 300) {
@@ -318,10 +244,30 @@ function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
               const data = line.replace(/^data:\s*/, '');
               if (data === '[DONE]' || !data) continue;
               try {
-                const delta = JSON.parse(data).choices?.[0]?.delta?.content;
+                const parsed = JSON.parse(data);
+                const delta = parsed.choices?.[0]?.delta;
                 if (delta) {
-                  fullContent += delta;
-                  onSseChunk(delta, fullContent);
+                  let chunkContent = '';
+                  // Wrap reasoning_content in <thinking> tags if provided
+                  if (delta.reasoning_content) {
+                    chunkContent = delta.reasoning_content;
+                    if (!inThinking) {
+                      inThinking = true;
+                      chunkContent = '<thinking>\n' + chunkContent;
+                    }
+                  } else if (delta.content != null) {
+                    if (inThinking) {
+                      inThinking = false;
+                      chunkContent = '\n</thinking>\n' + delta.content;
+                    } else {
+                      chunkContent = delta.content;
+                    }
+                  }
+
+                  if (chunkContent) {
+                    fullContent += chunkContent;
+                    onSseChunk(chunkContent, fullContent);
+                  }
                 }
               } catch (e) {
                 // Non-JSON SSE lines — skip
@@ -341,10 +287,29 @@ function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
               const data = lastLine.replace(/^data:\s*/, '');
               if (data !== '[DONE]' && data) {
                 try {
-                  const delta = JSON.parse(data).choices?.[0]?.delta?.content;
+                  const parsed = JSON.parse(data);
+                  const delta = parsed.choices?.[0]?.delta;
                   if (delta) {
-                    fullContent += delta;
-                    onSseChunk(delta, fullContent);
+                    let chunkContent = '';
+                    if (delta.reasoning_content) {
+                      if (!inThinking) {
+                        inThinking = true;
+                        chunkContent = '<thinking>\n' + delta.reasoning_content;
+                      } else {
+                        chunkContent = delta.reasoning_content;
+                      }
+                    } else if (delta.content != null) {
+                      if (inThinking) {
+                        inThinking = false;
+                        chunkContent = '\n</thinking>\n' + delta.content;
+                      } else {
+                        chunkContent = delta.content;
+                      }
+                    }
+                    if (chunkContent) {
+                      fullContent += chunkContent;
+                      onSseChunk(chunkContent, fullContent);
+                    }
                   }
                 } catch (e) { /* skip */ }
               }
@@ -389,12 +354,12 @@ ipcMain.handle('ai:sendWithTools', async (event, { config, messages, tools }) =>
   if (isAIRateLimited()) {
     return { error: 'AI request rejected: rate limit exceeded (10/min)' };
   }
-  const { baseUrl, apiKey, model, temperature, maxTokens } = config;
+  const { baseUrl, apiKey, model, temperature, maxTokens, thinking, thinkingBudget } = config;
 
   console.log('[AI] Attempting request with tools to:', baseUrl, 'model:', model);
 
   if (!baseUrl || !apiKey || !model) {
-    return { error: 'Provider non configurato: mancano URL, API key o modello.' };
+    return { error: 'Provider not configured: missing URL, API key, or model.' };
   }
 
   const url = baseUrl.replace(/\/+$/, '') + '/chat/completions';
@@ -402,14 +367,22 @@ ipcMain.handle('ai:sendWithTools', async (event, { config, messages, tools }) =>
   const client = isHttps ? https : http;
   const authHeader = 'Bearer ' + apiKey;
 
-  const body = JSON.stringify({
+  const bodyObj = {
     model,
     messages,
     tools,
     temperature: temperature ?? 0.7,
     max_tokens: maxTokens ?? 4096,
     stream: false // tool_use non supportato con streaming su tutti i provider
-  });
+  };
+
+  if (thinking) {
+    const budget = thinkingBudget || 16384;
+    bodyObj.max_tokens = Math.max(bodyObj.max_tokens, budget + 1024, 8192);
+    bodyObj.thinking = { type: 'enabled', budget_tokens: budget };
+  }
+
+  const body = JSON.stringify(bodyObj);
 
   let retries = 0;
   while (retries < MAX_RETRIES) {
@@ -422,7 +395,7 @@ ipcMain.handle('ai:sendWithTools', async (event, { config, messages, tools }) =>
 
     if (res.statusCode === 429 || res.statusCode === 503) {
       if (retries >= MAX_RETRIES) {
-        return { error: `API Error ${res.statusCode}: Troppe richieste. Attendi qualche minuto.` };
+        return { error: `API Error ${res.statusCode}: Too many requests. Please wait a few minutes.` };
       }
       const retryAfter = parseInt(res.headers['retry-after'] || '30', 10);
       const delayMs = Math.min(retryAfter * 1000, RETRY_BASE_DELAY * Math.pow(2, retries - 1));
@@ -439,15 +412,22 @@ ipcMain.handle('ai:sendWithTools', async (event, { config, messages, tools }) =>
       const parsed = JSON.parse(res.body);
       const choice = parsed.choices?.[0];
       if (choice?.message) {
-        const resp = { content: choice.message.content || '' };
+        let textContent = choice.message.content || '';
+
+        // Wrap reasoning_content in <thinking> for non-streaming too
+        if (choice.message.reasoning_content) {
+           textContent = `<thinking>\n${choice.message.reasoning_content}\n</thinking>\n${textContent}`;
+        }
+
+        const resp = { content: textContent };
         if (choice.message.tool_calls) {
           resp.tool_calls = choice.message.tool_calls;
         }
         return resp;
       }
-      return { error: 'Risposta non valida: ' + res.body.slice(0, 500) };
+      return { error: 'Invalid response: ' + res.body.slice(0, 500) };
     } catch (e) {
-      return { error: 'Risposta non valida: ' + res.body.slice(0, 300) };
+      return { error: 'Invalid response: ' + res.body.slice(0, 300) };
     }
   }
 
@@ -464,7 +444,7 @@ ipcMain.handle('ai:send', async (event, { config, messages, streamId }) => {
 
   if (!baseUrl || !apiKey || !model) {
     console.error('[AI] Missing config:', { baseUrl: !!baseUrl, apiKey: !!apiKey, model: !!model });
-    return { error: 'Provider non configurato: mancano URL, API key o modello.' };
+    return { error: 'Provider not configured: missing URL, API key, or model.' };
   }
 
   const url = baseUrl.replace(/\/+$/, '') + '/chat/completions';
@@ -481,8 +461,9 @@ ipcMain.handle('ai:send', async (event, { config, messages, streamId }) => {
     stream: true
   };
   if (thinking) {
-    bodyObj.max_tokens = Math.max(bodyObj.max_tokens, thinkingBudget || 16384, 8192);
-    bodyObj.thinking = { type: 'enabled', budget_tokens: thinkingBudget || 16384 };
+    const budget = thinkingBudget || 16384;
+    bodyObj.max_tokens = Math.max(bodyObj.max_tokens, budget + 1024, 8192);
+    bodyObj.thinking = { type: 'enabled', budget_tokens: budget };
   }
   const fullBody = JSON.stringify(bodyObj);
 
@@ -519,7 +500,7 @@ ipcMain.handle('ai:send', async (event, { config, messages, streamId }) => {
 
     if (res.statusCode === 429 || res.statusCode === 503) {
       if (retries >= MAX_RETRIES) {
-        return { error: `API Error ${res.statusCode}: Troppe richieste. Attendi qualche minuto.` };
+        return { error: `API Error ${res.statusCode}: Too many requests. Please wait a few minutes.` };
       }
       const retryAfter = parseInt(res.headers['retry-after'] || '30', 10);
       const delayMs = Math.min(retryAfter * 1000, RETRY_BASE_DELAY * Math.pow(2, retries - 1));
@@ -536,7 +517,7 @@ ipcMain.handle('ai:send', async (event, { config, messages, streamId }) => {
     // 5xx errors — retry with backoff
     if (res.statusCode >= 500) {
       if (retries >= MAX_RETRIES) {
-        return { error: `API Error ${res.statusCode}: Server error dopo ${MAX_RETRIES} tentativi.` };
+        return { error: `API Error ${res.statusCode}: Server error after ${MAX_RETRIES} attempts.` };
       }
       await delay(RETRY_BASE_DELAY * Math.pow(2, retries - 1));
       continue;
@@ -595,33 +576,67 @@ ipcMain.handle('ai:cancel', async (_event, requestId) => {
 
 ipcMain.handle('cmd:exec', async (_event, command, cwd) => {
   // Block shell metacharacters that allow command chaining, piping, subshell, globbing
-  if (/[;|&$`<>\\(){}!\[\]*?~%\^'"\n\r]/.test(command)) {
+  // Allow quotes for complex arguments
+  if (/[;|&$`<>\\(){}!\[\]*?~%\^\n\r]/.test(command)) {
     return { ok: false, error: 'Command rejected: invalid characters not allowed' };
   }
   if (isCommandRateLimited()) {
     return { ok: false, error: 'Command rejected: rate limit exceeded (5/min)' };
   }
-  // Parse executable + args from the command string
-  const tokens = command.trim().split(/\s+/).filter(Boolean);
+  // Parse executable + args from the command string respecting quotes
+  const tokens = [];
+  let currentToken = '';
+  let inQuote = null;
+
+  for (let i = 0; i < command.length; i++) {
+    const char = command[i];
+    if (inQuote) {
+      if (char === inQuote) {
+        inQuote = null;
+      } else {
+        currentToken += char;
+      }
+    } else {
+      if (char === "'" || char === '"') {
+        inQuote = char;
+      } else if (/\s/.test(char)) {
+        if (currentToken.length > 0) {
+          tokens.push(currentToken);
+          currentToken = '';
+        }
+      } else {
+        currentToken += char;
+      }
+    }
+  }
+  if (currentToken.length > 0) {
+    tokens.push(currentToken);
+  }
+
   if (tokens.length === 0) {
     return { ok: false, error: 'Command rejected: empty command' };
   }
   const exe = tokens[0];
+  const args = tokens.slice(1);
 
   const ALLOWED_COMMANDS = ['npm', 'node', 'ls', 'esbuild', 'electron', 'electron-builder'];
-  const baseExe = path.basename(exe);
 
-  if (!ALLOWED_COMMANDS.includes(baseExe)) {
-    return { ok: false, error: `Command rejected: executable '${baseExe}' is not in the allowlist` };
+  if (!ALLOWED_COMMANDS.includes(exe)) {
+    return { ok: false, error: `Command rejected: executable '${exe}' is not in the allowlist` };
   }
-  const args = tokens.slice(1);
+
+  // Windows requires appending .cmd to execute batch scripts without shell: true
+  const isWindows = process.platform === 'win32';
+  const windowsBatchCommands = ['npm', 'esbuild', 'electron', 'electron-builder'];
+  const finalExe = (isWindows && windowsBatchCommands.includes(exe)) ? `${exe}.cmd` : exe;
+
   // Validate cwd against project root
-  const effectiveCwd = cwd || rootDir;
+  const effectiveCwd = cwd || projectRoot || rootDir;
   if (!validatePath(effectiveCwd)) {
     return { ok: false, error: 'Command rejected: cwd outside project root' };
   }
   return new Promise((resolve) => {
-    const child = spawn(exe, args, { cwd: effectiveCwd, timeout: 30000 });
+    const child = spawn(finalExe, args, { cwd: effectiveCwd, timeout: 30000, shell: false });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', d => { stdout += d.toString(); });
@@ -734,7 +749,7 @@ ipcMain.handle('mcp:connect', async (_event, id, config) => {
 
 ipcMain.handle('mcp:call-tool', async (_event, serverId, toolName, args) => {
   const proc = mcpProcesses[serverId];
-  if (!proc) return { error: `Server ${serverId} non connesso` };
+  if (!proc) return { error: `Server ${serverId} not connected` };
 
   return new Promise((resolve) => {
     // Use incremental counter for collision-free reqIds

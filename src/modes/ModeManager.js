@@ -72,7 +72,8 @@ export default class ModeManager {
   validateReasoning(response) {
     if (this.selectedEffort === 'off') return true;
     if (!this.enforceReasoning) return true;
-    if (this.selectedEffort === 'custom' && this.customEffortText) return true;
+    // For custom effort, we should bypass validation completely since we don't know if the user asked for reasoning.
+    if (this.selectedEffort === 'custom') return true;
     return response.includes('<thinking>') || response.includes('</thinking>');
   }
 

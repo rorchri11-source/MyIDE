@@ -1,7 +1,7 @@
 /**
- * Effort System — direttive di profondita' analitica per l'AI.
- * Inietta un blocco <thinking> + direttiva effort nel system prompt.
- * Ogni livello controlla quanto in profondita l'AI analizza il problema.
+ * Effort System — directives for analytical depth for the AI.
+ * Injects a <thinking> block + effort directive into the system prompt.
+ * Each level controls how deeply the AI analyzes the problem.
  */
 
 export const EFFORT_LEVELS = {
@@ -13,16 +13,16 @@ export const EFFORT_LEVELS = {
 };
 
 export const EFFORT_LABELS = {
-  off: '🚫 Nessun ragionamento',
-  low: '⚡ Rapido',
-  medium: '⚖️ Bilanciato',
-  high: '🔍 Approfondito',
-  max: '🧠 Massimo'
+  off: '🚫 No reasoning',
+  low: '⚡ Quick',
+  medium: '⚖️ Balanced',
+  high: '🔍 Deep',
+  max: '🧠 Maximum'
 };
 
 /**
- * Prompt di base con thinking block — iniettato in OGNI richiesta AI.
- * Definisce le regole di esecuzione obbligatorie.
+ * Base prompt with thinking block — injected into EVERY AI request.
+ * Defines mandatory execution rules.
  */
 export const THINKING_BASE_PROMPT = `## Reasoning Protocol
 
@@ -38,8 +38,8 @@ Before generating any output, you MUST reason through the problem inside <thinki
 After closing </thinking>, generate ONLY the final output (code, explanation, or solution) that matches your plan.`;
 
 /**
- * Versione senza reasoning — per modelli che NON supportano <thinking>.
- * Rimuove le istruzioni di reasoning e da' istruzioni dirette.
+ * Version without reasoning — for models that DO NOT support <thinking>.
+ * Removes reasoning instructions and gives direct instructions.
  */
 export const NO_THINKING_PROMPT = `## Direct Response Protocol
 
@@ -48,8 +48,8 @@ Respond directly with the solution, code, or answer requested.
 Be concise, accurate, and focused on the user's request.`;
 
 /**
- * Reasoning con anti-hallucination e tool awareness.
- * Iniettato SOLO se il model supporta thinking.
+ * Reasoning with anti-hallucination and tool awareness.
+ * Injected ONLY if the model supports thinking.
  */
 export const THINKING_WITH_TOOLS = `## Reasoning Protocol
 
@@ -78,8 +78,8 @@ After closing </thinking>, generate ONLY the final output (code, explanation, or
 - Never claim a file exists or has specific content without reading it first.`;
 
 /**
- * Direttive di effort per livello. Viene concatenata al base prompt.
- * Il livello 'off' non ha direttiva — usa solo NO_THINKING_PROMPT.
+ * Effort directives per level. It is concatenated to the base prompt.
+ * The 'off' level has no directive — it only uses NO_THINKING_PROMPT.
  */
 const EFFORT_DIRECTIVES = {
   low: `
@@ -112,8 +112,8 @@ Do NOT generate the final output until every aspect has been deeply analyzed and
 };
 
 /**
- * Few-shot examples per tool_calls — mostrano all'AI il formato CORRETTO.
- * Iniettati nel system prompt quando reasoning e' attivo.
+ * Few-shot examples for tool_calls — shows the AI the CORRECT format.
+ * Injected into the system prompt when reasoning is active.
  */
 export const TOOL_USAGE_EXAMPLES = `## Tool Usage Examples
 
@@ -162,7 +162,7 @@ User: "Add error handling to the server"
 </example>`;
 
 /**
- * Costruisce il prompt completo per un dato livello di effort.
+ * Builds the complete prompt for a given effort level.
  * @param {string} level - One of 'low', 'medium', 'high', 'max', 'off'
  * @returns {string} The full prompt string
  */
@@ -177,7 +177,7 @@ export function buildEffortPrompt(level) {
 }
 
 /**
- * Restituisce la lista completa dei livelli con label.
+ * Returns the full list of levels with labels.
  */
 export function getEffortOptions() {
   return Object.entries(EFFORT_LEVELS).map(([key, value]) => ({
@@ -188,7 +188,7 @@ export function getEffortOptions() {
 }
 
 /**
- * Restituisce il text completo per modifica manuale.
+ * Returns the complete text for manual editing.
  */
 export function getEffortText(level, customOverride) {
   if (level !== 'custom') {
@@ -198,7 +198,7 @@ export function getEffortText(level, customOverride) {
 }
 
 /**
- * Restituisce gli esempi di tool usage da iniettare nel prompt.
+ * Returns the tool usage examples to be injected into the prompt.
  */
 export function getToolExamples() {
   return TOOL_USAGE_EXAMPLES;

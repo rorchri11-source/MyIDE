@@ -125,6 +125,10 @@ export default class AgentRunner {
             tool_calls: toolCalls
           });
 
+          if (result.content) {
+            this.chat.addMessage('assistant', result.content);
+          }
+
           // Process tool calls sequentially
           for (const tc of toolCalls) {
             if (!this.running) break;
@@ -134,12 +138,12 @@ export default class AgentRunner {
             try {
               args = JSON.parse(tc.function.arguments);
             } catch (e) {
-              this.chat.addMessage('system', `Errore parsing tool args per ${fnName}: ${e.message}`);
+              this.chat.addMessage('system', `Error parsing tool args for ${fnName}: ${e.message}`);
               this.chat.chatHistory.push({
                 role: 'tool',
                 tool_call_id: tc.id,
                 name: fnName,
-                content: `Errore parsing argomenti: ${e.message}`
+                content: `Error parsing arguments: ${e.message}`
               });
               continue;
             }
@@ -150,14 +154,23 @@ export default class AgentRunner {
             const needsConfirm = (fnName === 'fs_write' || fnName === 'cmd_run');
             if (needsConfirm) {
               const confirmed = await this.requestConfirmation(fnName, args);
-              if (!this.running) break;
-              if (!confirmed) {
-                this.chat.addMessage('system', `Tool ${fnName} cancellato dall'utente.`);
+              if (!this.running) {
+                // Se interrotto, dobbiamo comunque inviare un risultato tool fallito per non lasciare il LLM appeso se riprende
                 this.chat.chatHistory.push({
                   role: 'tool',
                   tool_call_id: tc.id,
                   name: fnName,
-                  content: 'CANCELLATO DALL\'UTENTE: operazione non eseguita.'
+                  content: 'Interrotto'
+                });
+                break;
+              }
+              if (!confirmed) {
+                this.chat.addMessage('system', `Tool ${fnName} cancelled by user.`);
+                this.chat.chatHistory.push({
+                  role: 'tool',
+                  tool_call_id: tc.id,
+                  name: fnName,
+                  content: 'CANCELLED BY USER: operation not executed.'
                 });
                 continue;
               }
@@ -186,7 +199,7 @@ export default class AgentRunner {
               tool_call_id: tc.id,
               name: fnName,
               content: toolResult.error
-                ? `Errore: ${toolResult.error}`
+                ? `Error: ${toolResult.error}`
                 : (toolResult.output || toolResult.message || 'OK')
             });
 
@@ -194,7 +207,7 @@ export default class AgentRunner {
           }
         } else {
           // No tool calls — final response
-          const content = result.content || '(Nessuna risposta)';
+          const content = result.content || '(No response)';
           this.chat.addMessage('assistant', content);
           this.chat.chatHistory.push({ role: 'assistant', content });
           reachedLimit = false;
@@ -203,11 +216,11 @@ export default class AgentRunner {
       }
 
       if (reachedLimit && iteration >= this.maxToolIterations) {
-        this.chat.addMessage('system', 'Agente: raggiunto limite massimo di iterazioni.');
+        this.chat.addMessage('system', 'Agent: reached maximum iteration limit.');
       }
     } catch (error) {
       console.error('Agent error:', error);
-      this.chat.addMessage('system', `Errore agente: ${error.message}`);
+      this.chat.addMessage('system', `Agent error: ${error.message}`);
     } finally {
       for (const id of Object.keys(this.pendingToolConfirmations)) {
         this.pendingToolConfirmations[id](false);
@@ -294,23 +307,23 @@ ${toolsHint}
       case 'fs_read': {
         const result = await window.api.fsReadFile(args.path);
         if (result.ok) {
-          return { output: result.content, message: `File letto: ${result.content.length} caratteri` };
+          return { output: result.content, message: `File read: ${result.content.length} characters` };
         }
         return { error: result.error };
       }
       case 'fs_write': {
         const result = await window.api.fsWriteFile(args.path, args.content);
         if (result.ok) {
-          return { message: `File scritto: ${args.path}` };
+          return { message: `File written: ${args.path}` };
         }
         return { error: result.error };
       }
       case 'cmd_run': {
         const result = await window.api.execCommand(args.command, args.cwd);
-        const output = [result.stdout, result.stderr].filter(Boolean).join('\n') || '(nessun output)';
+        const output = [result.stdout, result.stderr].filter(Boolean).join('\n') || '(no output)';
         const MAX_OUTPUT = 200000;
         const truncated = output.length > MAX_OUTPUT
-          ? output.slice(0, MAX_OUTPUT) + '\n\n[... output troncato a ' + MAX_OUTPUT + ' char, totale ' + output.length + ' char ...]'
+          ? output.slice(0, MAX_OUTPUT) + '\n\n[... output truncated to ' + MAX_OUTPUT + ' char, total ' + output.length + ' char ...]'
           : output;
         return {
           output: truncated,
@@ -322,7 +335,7 @@ ${toolsHint}
         if (this.mcp && this.mcp.availableTools && this.mcp.availableTools[fnName]) {
           return await this.mcp.callTool(fnName, args);
         }
-        return { error: `Tool sconosciuto: ${fnName}` };
+        return { error: `Unknown tool: ${fnName}` };
     }
   }
 }
