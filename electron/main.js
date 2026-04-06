@@ -200,6 +200,74 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function isPrivateIP(ip) {
+  // IPv4 mapped IPv6
+  if (ip.startsWith('::ffff:')) {
+    ip = ip.replace('::ffff:', '');
+  }
+
+  // IPv6 localhost and unspecified
+  if (ip === '::1' || ip === '::' || ip === '0:0:0:0:0:0:0:1') return true;
+
+  // Simple IPv4 blocks
+  const parts = ip.split('.');
+  if (parts.length === 4) {
+    const [a, b] = parts.map(Number);
+    if (
+      a === 0 || // Current network
+      a === 10 || // Private
+      a === 127 || // Loopback
+      (a === 100 && b >= 64 && b <= 127) || // Carrier-grade NAT
+      (a === 169 && b === 254) || // Link-local
+      (a === 172 && b >= 16 && b <= 31) || // Private
+      a === 192 && b === 168 || // Private
+      a === 192 && b === 0 && parts[2] === '0' || // IETF Protocol Assignments
+      a === 192 && b === 0 && parts[2] === '2' || // TEST-NET-1
+      a === 198 && b >= 18 && b <= 19 || // Benchmark Tests
+      a === 198 && b === 51 && parts[2] === '100' || // TEST-NET-2
+      a === 203 && b === 0 && parts[2] === '113' || // TEST-NET-3
+      a >= 224 // Multicast and reserved
+    ) {
+      return true;
+    }
+  } else if (ip.includes(':')) {
+    // IPv6 Private / Link-local / Unique Local
+    const lowerIP = ip.toLowerCase();
+    if (
+      lowerIP.startsWith('fc') ||
+      lowerIP.startsWith('fd') ||
+      lowerIP.startsWith('fe8') ||
+      lowerIP.startsWith('fe9') ||
+      lowerIP.startsWith('fea') ||
+      lowerIP.startsWith('feb')
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function safeLookup(hostname) {
+  return new Promise((resolve, reject) => {
+    // If hostname is already an IP, we validate it directly.
+    if (net.isIP(hostname)) {
+      if (isPrivateIP(hostname)) {
+        return reject(new Error(`SSRF blocked: ${hostname} is a private IP`));
+      }
+      return resolve(hostname);
+    }
+
+    dns.lookup(hostname, (err, address, family) => {
+      if (err) return reject(err);
+      if (isPrivateIP(address)) {
+        return reject(new Error(`SSRF blocked: Resolved IP ${address} is private`));
+      }
+      resolve(address);
+    });
+  });
+}
+
 function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
   const requestId = ++_nextRequestId;
   return new Promise((resolve) => {
