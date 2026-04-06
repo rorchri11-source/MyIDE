@@ -164,7 +164,7 @@ export default class TerminalUI {
 
   appendLine(text, type = 'output') {
     const line = document.createElement('div');
-    line.className = `terminal-line terminal-${type}`;
+    line.className = `terminal-line terminal-msg-${type}`;
     line.textContent = text;
     this.outputEl.appendChild(line);
     this.outputEl.scrollTop = this.outputEl.scrollHeight;

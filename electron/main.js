@@ -188,16 +188,84 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function isPrivateIP(ip) {
+  if (net.isIPv4(ip)) {
+    const parts = ip.split('.').map(Number);
+    return (
+      parts[0] === 127 ||
+      parts[0] === 10 ||
+      (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
+      (parts[0] === 192 && parts[1] === 168) ||
+      (parts[0] === 169 && parts[1] === 254) ||
+      parts[0] === 0 ||
+      (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127) ||
+      (parts[0] === 192 && parts[1] === 0 && parts[2] === 0) ||
+      (parts[0] === 192 && parts[1] === 0 && parts[2] === 2) ||
+      (parts[0] === 198 && parts[1] >= 18 && parts[1] <= 19) ||
+      (parts[0] === 198 && parts[1] === 51 && parts[2] === 100) ||
+      (parts[0] === 203 && parts[1] === 0 && parts[2] === 113) ||
+      parts[0] >= 224
+    );
+  } else if (net.isIPv6(ip)) {
+    // Handle IPv4-mapped IPv6 addresses (e.g., ::ffff:127.0.0.1)
+    if (ip.toLowerCase().startsWith('::ffff:')) {
+      const ipv4Part = ip.substring(7);
+      if (net.isIPv4(ipv4Part)) {
+        return isPrivateIP(ipv4Part);
+      }
+    }
+    return (
+      ip === '::1' ||
+      ip === '::' ||
+      ip.toLowerCase().startsWith('fd') ||
+      ip.toLowerCase().startsWith('fc') ||
+      ip.toLowerCase().startsWith('fe8') ||
+      ip.toLowerCase().startsWith('fe9') ||
+      ip.toLowerCase().startsWith('fea') ||
+      ip.toLowerCase().startsWith('feb') ||
+      ip.toLowerCase().startsWith('ff')
+    );
+  }
+  return false;
+}
+
+function safeLookup(hostname, options, callback) {
+  if (typeof options === 'function') {
+    callback = options;
+    options = {};
+  }
+  dns.lookup(hostname, options, (err, address, family) => {
+    if (err) return callback(err);
+    if (Array.isArray(address)) {
+      for (const addr of address) {
+        if (isPrivateIP(addr.address)) {
+          return callback(new Error(`SSRF Protection: Access to internal IP ${addr.address} is blocked.`));
+        }
+      }
+    } else {
+      if (isPrivateIP(address)) {
+        return callback(new Error(`SSRF Protection: Access to internal IP ${address} is blocked.`));
+      }
+    }
+    callback(null, address, family);
+  });
+}
+
 function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
   const requestId = ++_nextRequestId;
   return new Promise((resolve) => {
     const parsedUrl = new URL(url);
+
+    if (net.isIP(parsedUrl.hostname) && isPrivateIP(parsedUrl.hostname)) {
+      return resolve({ requestId, statusCode: 0, body: '', error: `SSRF Protection: Access to internal IP ${parsedUrl.hostname} is blocked.` });
+    }
 
     const req = client.request({
       hostname: parsedUrl.hostname,
       port: parsedUrl.port || (isHttps ? 443 : 80),
       path: parsedUrl.pathname + parsedUrl.search,
       method: 'POST',
+      lookup: safeLookup,
       headers: {
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(body),

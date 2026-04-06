@@ -2,10 +2,9 @@ const { _electron: electron } = require('playwright');
 
 (async () => {
   const electronApp = await electron.launch({ args: ['.'] });
-
   const window = await electronApp.firstWindow();
   await window.waitForSelector('#btn-settings', { timeout: 10000 });
-  await window.waitForTimeout(2000); // Wait for modals to pop up
+  await window.waitForTimeout(2000); // Wait for modals
 
   // Close help modal if it's there
   try {
@@ -13,21 +12,21 @@ const { _electron: electron } = require('playwright');
       await window.waitForTimeout(1000);
   } catch(e) {}
 
-  await window.screenshot({ path: '/home/jules/verification/main_screen.png' });
+  // Create a fake token usage so display is visible
+  await window.evaluate('document.getElementById("token-display").textContent = "1.5k tokens | 10%";');
 
-  await window.click('#btn-settings');
-  await window.waitForSelector('#settings-modal:not(.hidden)', { timeout: 5000 });
-  await window.waitForTimeout(500);
-  await window.screenshot({ path: '/home/jules/verification/settings_modal.png' });
+  // Show token dashboard
+  await window.click('#token-display');
+  await window.waitForTimeout(1000);
+  await window.screenshot({ path: '/home/jules/verification/token_dashboard.png' });
 
-  await window.click('#btn-close-settings');
-  await window.waitForTimeout(500);
+  await window.click('.token-dashboard-close');
+  await window.waitForTimeout(1000);
 
-  // Try to toggle terminal
-  await window.keyboard.press('Control+Shift+T');
-  await window.waitForSelector('#terminal-panel', { timeout: 5000 });
-  await window.waitForTimeout(500);
-  await window.screenshot({ path: '/home/jules/verification/terminal_panel.png' });
+  // Show chat history
+  await window.click('#btn-chat-history');
+  await window.waitForTimeout(1000);
+  await window.screenshot({ path: '/home/jules/verification/chat_history.png' });
 
   await electronApp.close();
 })();

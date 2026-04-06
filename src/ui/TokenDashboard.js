@@ -23,6 +23,7 @@ export default class TokenDashboard {
   }
 
   show() {
+    if (this.modalEl) return;
     const modal = document.createElement('div');
     modal.className = 'modal';
     modal.innerHTML = `
@@ -39,9 +40,10 @@ export default class TokenDashboard {
         <div class="token-chart">${this._renderChart()}</div>
       </div>`;
 
-    modal.querySelector('.token-dashboard-close').addEventListener('click', () => modal.remove());
-    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    modal.querySelector('.token-dashboard-close').addEventListener('click', () => { modal.remove(); this.modalEl = null; });
+    modal.addEventListener('click', (e) => { if (e.target === modal) { modal.remove(); this.modalEl = null; } });
     document.body.appendChild(modal);
+    this.modalEl = modal;
   }
 
   _renderChart() {
@@ -51,7 +53,7 @@ export default class TokenDashboard {
     this.messageTokens.forEach((msg, i) => {
       const heightPct = Math.max(5, (msg.tokens / maxTokens) * 100);
       const color = msg.role === 'user' ? 'var(--red)' : 'var(--amber)';
-      html += `<div class="token-bar-item"><div class="token-bar" style="height:${heightPct}px;background:${color};"><span class="token-bar-label">${Math.round(msg.tokens)}</span></div><div class="token-bar-index">#${i + 1}</div></div>`;
+      html += `<div class="token-bar-item"><div class="token-bar" style="height:${heightPct}%;background:${color};"><span class="token-bar-label">${Math.round(msg.tokens)}</span></div><div class="token-bar-index">#${i + 1}</div></div>`;
     });
     return html;
   }

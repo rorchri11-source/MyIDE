@@ -748,9 +748,9 @@ textarea.input-dark { font-family: inherit; }
 }
 
 .terminal-line { margin-bottom: 2px; }
-.terminal-command { color: var(--amber); }
-.terminal-line.terminal-output { color: var(--text-primary); }
-.terminal-error { color: var(--red-light); }
+.terminal-msg-command { color: var(--amber); }
+.terminal-msg-output { color: var(--text-primary); }
+.terminal-msg-error { color: var(--red-light); }
 
 .terminal-input-line {
   display: flex;
@@ -775,6 +775,140 @@ textarea.input-dark { font-family: inherit; }
   font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
   font-size: 12px;
   outline: none;
+}
+
+/* ═══════════════════════════════════════════════
+   TOKEN DASHBOARD
+   ═══════════════════════════════════════════════ */
+.token-dashboard-modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  width: 500px;
+  max-width: 90vw;
+  padding: 20px;
+  box-shadow: var(--shadow-lg);
+  animation: modalSlideIn 0.25s ease;
+}
+
+.token-summary {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.token-stat {
+  flex: 1;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  padding: 12px;
+  border-radius: var(--radius);
+  text-align: center;
+}
+
+.token-stat-label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.token-stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.token-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 120px;
+  padding: 10px 0;
+  border-top: 1px dashed var(--border);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.token-bar-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  height: 100%;
+}
+
+.token-bar {
+  width: 24px;
+  border-radius: 4px 4px 0 0;
+  position: relative;
+  transition: height 0.3s ease;
+}
+
+.token-bar-label {
+  position: absolute;
+  top: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  color: var(--text-secondary);
+}
+
+.token-bar-index {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* ═══════════════════════════════════════════════
+   CHAT HISTORY
+   ═══════════════════════════════════════════════ */
+.chat-session-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.chat-session-item:hover {
+  background: var(--bg-hover);
+  border-color: var(--red-soft-border);
+}
+
+.chat-session-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.chat-session-date {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: auto;
+  margin-right: 12px;
+}
+
+.chat-session-delete {
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.chat-session-delete:hover {
+  background: var(--red-soft);
+  color: var(--red-light);
 }
 
 /* ═══════════════════════════════════════════════

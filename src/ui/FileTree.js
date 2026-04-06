@@ -6,6 +6,12 @@ export default class FileTree {
     this.onFileClick = onFileClick;
     this.rootPath = null;
     this.treeData = null;
+    this.activeFilePath = null;
+  }
+
+  setActiveFile(filePath) {
+    this.activeFilePath = filePath;
+    this.render();
   }
 
   async loadFolder(folderPath) {
@@ -34,7 +40,8 @@ export default class FileTree {
   renderItems(items, depth) {
     for (const item of items) {
       const el = document.createElement('div');
-      el.className = 'file-tree-item' + (item.isDirectory ? ' dir' : '');
+      const isActive = !item.isDirectory && this.activeFilePath === item.path;
+      el.className = 'file-tree-item' + (item.isDirectory ? ' dir' : '') + (isActive ? ' active' : '');
       el.style.paddingLeft = `${8 + depth * 12}px`;
       el.dataset.path = item.path;
 
@@ -58,8 +65,11 @@ export default class FileTree {
             }
           }
           this.render();
-        } else if (this.onFileClick) {
-          this.onFileClick(item.path);
+        } else {
+          this.setActiveFile(item.path);
+          if (this.onFileClick) {
+            this.onFileClick(item.path);
+          }
         }
       });
 

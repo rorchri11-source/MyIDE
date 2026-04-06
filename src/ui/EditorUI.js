@@ -14,6 +14,7 @@ export default class EditorUI {
     this.openTabs = {};
     this.activeTab = null;
     this.currentFile = null;
+    this.onTabChange = null;
   }
 
   renderEditor() {
@@ -80,6 +81,8 @@ export default class EditorUI {
         this.openTabs[this.currentFile].content = doc;
       }
     });
+
+    if (this.onTabChange) this.onTabChange(filePath);
   }
 
   closeTab(filePath) {
@@ -99,6 +102,7 @@ export default class EditorUI {
         this.codeMirror = null;
       }
       if (this.fileInfoEl) this.fileInfoEl.textContent = '';
+      if (this.onTabChange) this.onTabChange(null);
       return;
     }
 
