@@ -162,7 +162,6 @@ ipcMain.handle('fs:open-folder-dialog', async () => {
   const result = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory'] });
   if (!result.canceled && result.filePaths.length > 0) {
     const fp = result.filePaths[0];
-    if (!validatePath(fp)) return { ok: false, error: 'Access denied: path outside project root' };
     return { ok: true, path: fp };
   }
   return { ok: false, canceled: true };

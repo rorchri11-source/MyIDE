@@ -175,6 +175,9 @@ class App {
           if (window.api.fsSetProjectRoot) {
             await window.api.fsSetProjectRoot(result.path);
           }
+        } else if (result.error) {
+          const statusEl = document.getElementById('status-text');
+          if (statusEl) statusEl.textContent = `Error: ${result.error}`;
         }
       } catch (e) {
         const statusEl = document.getElementById('status-text');
