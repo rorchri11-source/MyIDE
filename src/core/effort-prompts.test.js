@@ -36,4 +36,18 @@ test('buildEffortPrompt', async (t) => {
     assert.ok(result.startsWith(THINKING_WITH_TOOLS));
     assert.ok(result.includes('Effort: Medium'));
   });
+
+  await t.test('falls back to medium directive for missing or invalid levels', () => {
+    const undefinedResult = buildEffortPrompt();
+    assert.ok(undefinedResult.startsWith(THINKING_WITH_TOOLS));
+    assert.ok(undefinedResult.includes('Effort: Medium'));
+
+    const nullResult = buildEffortPrompt(null);
+    assert.ok(nullResult.startsWith(THINKING_WITH_TOOLS));
+    assert.ok(nullResult.includes('Effort: Medium'));
+
+    const emptyResult = buildEffortPrompt('');
+    assert.ok(emptyResult.startsWith(THINKING_WITH_TOOLS));
+    assert.ok(emptyResult.includes('Effort: Medium'));
+  });
 });
