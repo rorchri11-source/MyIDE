@@ -678,9 +678,12 @@ class App {
 
   _esc(text) {
     if (text == null) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 
   showTokenPanel() {
