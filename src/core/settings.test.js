@@ -65,4 +65,39 @@ test('deepMergeDefaults', async (t) => {
     const result = deepMergeDefaults(raw, defaults);
     assert.deepStrictEqual(result, { config: { a: 1 } });
   });
+
+  await t.test('handles deeply nested objects (3+ levels)', () => {
+    const raw = { l1: { l2: { l3: { a: 1 } } } };
+    const defaults = { l1: { l2: { l3: { b: 2 }, c: 3 } } };
+    const result = deepMergeDefaults(raw, defaults);
+    assert.deepStrictEqual(result, { l1: { l2: { l3: { a: 1, b: 2 }, c: 3 } } });
+  });
+
+  await t.test('handles raw having an array where defaults has an object', () => {
+    const raw = { prop: [1, 2] };
+    const defaults = { prop: { a: 1 } };
+    const result = deepMergeDefaults(raw, defaults);
+    assert.deepStrictEqual(result, { prop: [1, 2] });
+  });
+
+  await t.test('handles raw having an object where defaults has an array', () => {
+    const raw = { prop: { a: 1 } };
+    const defaults = { prop: [1, 2] };
+    const result = deepMergeDefaults(raw, defaults);
+    assert.deepStrictEqual(result, { prop: { a: 1 } });
+  });
+
+  await t.test('preserves raw extra properties at multiple depths', () => {
+    const raw = { l1: { extra1: 'yes', l2: { extra2: 'yes' } }, extraRoot: 'yes' };
+    const defaults = { l1: { l2: { a: 1 } } };
+    const result = deepMergeDefaults(raw, defaults);
+    assert.deepStrictEqual(result, { l1: { extra1: 'yes', l2: { extra2: 'yes', a: 1 } }, extraRoot: 'yes' });
+  });
+
+  await t.test('handles raw being completely empty while defaults has multiple nested objects', () => {
+    const raw = {};
+    const defaults = { l1: { l2: { l3: { a: 1 } } } };
+    const result = deepMergeDefaults(raw, defaults);
+    assert.deepStrictEqual(result, { l1: { l2: { l3: { a: 1 } } } });
+  });
 });
