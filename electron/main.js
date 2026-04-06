@@ -160,11 +160,14 @@ ipcMain.handle('fs:exists', async (_event, filePath) => {
 
 ipcMain.handle('settings:load', async () => {
   const settingsPath = path.join(rootDir, 'config', 'settings.json');
-  try {
-    if (fs.existsSync(settingsPath)) {
+  if (fs.existsSync(settingsPath)) {
+    try {
       return JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+    } catch (e) {
+      console.error('[Settings] Error parsing settings.json:', e);
+      // Fall through to return default object so the frontend does not crash
     }
-  } catch (e) {}
+  }
   return { providers: {}, activeProvider: null, preferences: {} };
 });
 
@@ -260,18 +263,29 @@ function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
       return resolve({ requestId, statusCode: 0, body: '', error: `SSRF Protection: Access to internal IP ${parsedUrl.hostname} is blocked.` });
     }
 
-    const req = client.request({
-      hostname: parsedUrl.hostname,
-      port: parsedUrl.port || (isHttps ? 443 : 80),
-      path: parsedUrl.pathname + parsedUrl.search,
-      method: 'POST',
-      lookup: safeLookup,
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(body),
-        'Authorization': authHeader
+    safeLookup(parsedUrl.hostname, { all: false }, (err, address, family) => {
+      if (err) {
+        return resolve({ requestId, statusCode: 0, body: '', error: `DNS lookup failed: ${err.message}` });
       }
-    }, (res) => {
+
+      const reqOptions = {
+        hostname: address,
+        port: parsedUrl.port || (isHttps ? 443 : 80),
+        path: parsedUrl.pathname + parsedUrl.search,
+        method: 'POST',
+        headers: {
+          'Host': parsedUrl.hostname,
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body),
+          'Authorization': authHeader
+        }
+      };
+
+      if (isHttps) {
+        reqOptions.servername = parsedUrl.hostname;
+      }
+
+      const req = client.request(reqOptions, (res) => {
       res.setEncoding('utf8');
 
       if (onSseChunk) {
@@ -344,21 +358,23 @@ function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
       }
     });
 
-    pendingRequests.set(requestId, req);
+        pendingRequests.set(requestId, req);
 
-    req.on('error', (err) => {
-      pendingRequests.delete(requestId);
-      resolve({ requestId, statusCode: 0, body: '', error: 'Connection error: ' + (err.message || 'unknown') });
+        req.on('error', (err) => {
+          pendingRequests.delete(requestId);
+          resolve({ requestId, statusCode: 0, body: '', error: 'Connection error: ' + (err.message || 'unknown') });
+        });
+
+        req.setTimeout(120000, () => {
+          pendingRequests.delete(requestId);
+          req.destroy();
+          resolve({ requestId, statusCode: 0, body: '', error: 'Request timeout' });
+        });
+
+        req.write(body);
+        req.end();
+      });
     });
-
-    req.setTimeout(120000, () => {
-      pendingRequests.delete(requestId);
-      req.destroy();
-      resolve({ requestId, statusCode: 0, body: '', error: 'Request timeout' });
-    });
-
-    req.write(body);
-    req.end();
   });
 }
 
