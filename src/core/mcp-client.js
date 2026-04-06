@@ -89,7 +89,7 @@ export default class MCPClient {
   disconnect() {
     if (!window.api) return;
     for (const id of Object.keys(this.connectedServers)) {
-      window.api.mcpDisconnect(id).catch(() => {});
+      window.api.mcpDisconnect(id).catch((e) => console.error(e));
     }
     this.connectedServers = {};
     this.availableTools = {};

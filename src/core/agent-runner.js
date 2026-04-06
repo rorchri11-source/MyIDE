@@ -340,7 +340,7 @@ ${toolsHint}
         const cwd = args.path || '.';
         const escapedPattern = args.pattern.replace(/'/g, "'\\''");
         // Using ripgrep or grep recursively, ignoring node_modules and .git
-        const cmd = `grep -rnIE --exclude-dir=node_modules --exclude-dir=.git '${escapedPattern}' .`;
+        const cmd = `grep -rnIE --exclude-dir=node_modules --exclude-dir=.git -e '${escapedPattern}' .`;
         const result = await window.api.execCommand(cmd, cwd);
         const output = [result.stdout, result.stderr].filter(Boolean).join('\n') || '(no matches found)';
         const MAX_OUTPUT = 100000;

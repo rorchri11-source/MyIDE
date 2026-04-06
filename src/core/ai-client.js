@@ -64,7 +64,7 @@ export default class AIClient {
   cancel() {
     if (this._pendingRequest) {
       if (window.api && window.api.aiCancel) {
-        window.api.aiCancel().catch(() => {});
+        window.api.aiCancel().catch((e) => console.error(e));
       }
       this._pendingRequest = null;
     }
