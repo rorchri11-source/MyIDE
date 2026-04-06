@@ -74,10 +74,12 @@ function validatePath(filePath) {
   } catch (e) {
     return false; // project root doesn't exist (anymore), deny all access
   }
-  // Use path.relative to prevent prefix-matching attacks
-  // e.g. projectRoot="C:\proj" vs resolved="C:\proj-evil"
+
   const relative = path.relative(canonicalRoot, canonical);
-  return relative === '' || (!relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative));
+  // Security: Prevent path traversal out of the project root.
+  // Using path.relative avoids prefix-matching attacks (e.g. projectRoot="C:\proj" vs resolved="C:\proj-evil" -> relative="..\proj-evil").
+  const isInside = !relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative);
+  return relative === '' || isInside;
 }
 
 function createPathValidator(label) {
