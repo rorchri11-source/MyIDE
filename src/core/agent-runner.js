@@ -125,6 +125,10 @@ export default class AgentRunner {
             tool_calls: toolCalls
           });
 
+          if (result.content) {
+            this.chat.addMessage('assistant', result.content);
+          }
+
           // Process tool calls sequentially
           for (const tc of toolCalls) {
             if (!this.running) break;
@@ -150,7 +154,16 @@ export default class AgentRunner {
             const needsConfirm = (fnName === 'fs_write' || fnName === 'cmd_run');
             if (needsConfirm) {
               const confirmed = await this.requestConfirmation(fnName, args);
-              if (!this.running) break;
+              if (!this.running) {
+                // Se interrotto, dobbiamo comunque inviare un risultato tool fallito per non lasciare il LLM appeso se riprende
+                this.chat.chatHistory.push({
+                  role: 'tool',
+                  tool_call_id: tc.id,
+                  name: fnName,
+                  content: 'Interrotto'
+                });
+                break;
+              }
               if (!confirmed) {
                 this.chat.addMessage('system', `Tool ${fnName} cancellato dall'utente.`);
                 this.chat.chatHistory.push({
