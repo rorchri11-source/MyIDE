@@ -166,15 +166,15 @@ class App {
       try {
         const result = await window.api.fsOpenFolder();
         if (result.ok) {
+          if (window.api.fsSetProjectRoot) {
+            await window.api.fsSetProjectRoot(result.path);
+          }
           await this.fileTree.loadFolder(result.path);
           const folderEl = document.getElementById('current-folder');
           if (folderEl) folderEl.textContent = result.path;
           const sidebar = document.getElementById('sidebar');
           if (sidebar) sidebar.classList.remove('hidden');
           if (this.terminal) this.terminal.cwd = result.path;
-          if (window.api.fsSetProjectRoot) {
-            await window.api.fsSetProjectRoot(result.path);
-          }
         } else if (result.error) {
           const statusEl = document.getElementById('status-text');
           if (statusEl) statusEl.textContent = `Error: ${result.error}`;

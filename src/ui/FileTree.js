@@ -28,6 +28,8 @@ export default class FileTree {
         return a.name.localeCompare(b.name);
       });
       this.render();
+    } else {
+      throw new Error(result.error || 'Failed to list directory');
     }
   }
 
