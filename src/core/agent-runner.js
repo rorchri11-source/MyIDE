@@ -84,16 +84,16 @@ export default class AgentRunner {
 
       let iteration = 0;
       let reachedLimit = true;
+      const baseSystemContent = contextMessages[0] ? contextMessages[0].content : '';
+
       while (this.running && iteration < this.maxToolIterations) {
         this.chat.setLoading(true, `🤔 Agent: thinking (step ${iteration + 1}/${this.maxToolIterations})...`);
         iteration++;
 
         // Enforce reasoning: inject into system message (zero history token cost)
-        if (this.modeManager) {
+        if (this.modeManager && contextMessages[0]) {
           const reminder = this.modeManager.getEnforcementReminder(this.chat.chatHistory);
-          if (reminder) {
-            contextMessages[0] = { ...contextMessages[0], content: contextMessages[0].content + reminder };
-          }
+          contextMessages[0] = { ...contextMessages[0], content: baseSystemContent + (reminder || '') };
         }
 
         const messages = [
@@ -301,6 +301,9 @@ ${toolsHint}
       case 'fs_write': {
         const result = await window.api.fsWriteFile(args.path, args.content);
         if (result.ok) {
+          if (this.chat.onFileCreatedCallback) {
+            this.chat.onFileCreatedCallback(args.path, args.content);
+          }
           return { message: `File written: ${args.path}` };
         }
         return { error: result.error };
