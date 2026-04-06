@@ -162,11 +162,21 @@ ipcMain.handle('fs:exists', async (_event, filePath) => {
 
 ipcMain.handle('settings:load', async () => {
   const settingsPath = path.join(rootDir, 'config', 'settings.json');
-  try {
-    if (fs.existsSync(settingsPath)) {
+  if (fs.existsSync(settingsPath)) {
+    try {
       return JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+    } catch (e) {
+      console.error('[Settings] Error parsing settings.json:', e);
+      try {
+        const backupPath = settingsPath + '.bak.' + Date.now();
+        fs.renameSync(settingsPath, backupPath);
+        console.error('[Settings] Backed up malformed settings.json to:', backupPath);
+      } catch (backupErr) {
+        console.error('[Settings] Failed to back up malformed settings.json:', backupErr);
+      }
+      // Fall through to return default object so the frontend does not crash
     }
-  } catch (e) {}
+  }
   return { providers: {}, activeProvider: null, preferences: {} };
 });
 
@@ -205,7 +215,8 @@ function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
         'Content-Length': Buffer.byteLength(body),
         'Authorization': authHeader
       }
-    }, (res) => {
+
+      const req = client.request(reqOptions, (res) => {
       res.setEncoding('utf8');
 
       if (onSseChunk) {
@@ -319,21 +330,23 @@ function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
       }
     });
 
-    pendingRequests.set(requestId, req);
+        pendingRequests.set(requestId, req);
 
-    req.on('error', (err) => {
-      pendingRequests.delete(requestId);
-      resolve({ requestId, statusCode: 0, body: '', error: 'Connection error: ' + (err.message || 'unknown') });
+        req.on('error', (err) => {
+          pendingRequests.delete(requestId);
+          resolve({ requestId, statusCode: 0, body: '', error: 'Connection error: ' + (err.message || 'unknown') });
+        });
+
+        req.setTimeout(120000, () => {
+          pendingRequests.delete(requestId);
+          req.destroy();
+          resolve({ requestId, statusCode: 0, body: '', error: 'Request timeout' });
+        });
+
+        req.write(body);
+        req.end();
+      });
     });
-
-    req.setTimeout(120000, () => {
-      pendingRequests.delete(requestId);
-      req.destroy();
-      resolve({ requestId, statusCode: 0, body: '', error: 'Request timeout' });
-    });
-
-    req.write(body);
-    req.end();
   });
 }
 
