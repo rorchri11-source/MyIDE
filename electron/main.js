@@ -285,26 +285,32 @@ function safeLookup(hostname) {
 
 function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
   const requestId = ++_nextRequestId;
-  return new Promise((resolve) => {
+  return new Promise(async (resolve) => {
     const parsedUrl = new URL(url);
+    const originalHostname = parsedUrl.hostname;
 
-    if (net.isIP(parsedUrl.hostname) && isPrivateIP(parsedUrl.hostname)) {
-      return resolve({ requestId, statusCode: 0, body: '', error: `SSRF Protection: Access to internal IP ${parsedUrl.hostname} is blocked.` });
+    let resolvedIP;
+    try {
+      resolvedIP = await safeLookup(originalHostname);
+    } catch (err) {
+      return resolve({ requestId, statusCode: 0, body: '', error: err.message });
     }
 
-    const req = client.request({
-      hostname: parsedUrl.hostname,
+    const reqOptions = {
+      hostname: resolvedIP,
       port: parsedUrl.port || (isHttps ? 443 : 80),
       path: parsedUrl.pathname + parsedUrl.search,
       method: 'POST',
-      lookup: safeLookup,
+      servername: originalHostname,
       headers: {
+        'Host': originalHostname,
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(body),
         'Authorization': authHeader
       }
+    };
 
-      const req = client.request(reqOptions, (res) => {
+    const req = client.request(reqOptions, (res) => {
       res.setEncoding('utf8');
 
       if (onSseChunk) {
@@ -433,8 +439,6 @@ function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
 
         req.write(body);
         req.end();
-      });
-    });
   });
 }
 

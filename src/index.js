@@ -702,9 +702,9 @@ class App {
     let html = `<div style="margin-bottom:12px;">`;
     html += `<p><strong>Provider:</strong> ${this._esc(provider?.name || 'Nessuno selezionato')}</p>`;
     html += `<p><strong>Modello:</strong> ${this._esc(provider?.model || 'Non impostato')}</p>`;
-    html += `<p><strong>Max Context Tokens:</strong> ${provider?.maxContextTokens?.toLocaleString() || '128,000'}</p>`;
+    html += `<p><strong>Max Context Tokens:</strong> ${this._esc(provider?.maxContextTokens?.toLocaleString() || '128,000')}</p>`;
     html += `<p><strong>Messaggi in chat:</strong> ${history.length}</p>`;
-    html += `<p><strong>Tokens stimati (output):</strong> ~${approxTokens.toLocaleString()} (${(approxTokens / 1000).toFixed(1)}K)</p>`;
+    html += `<p><strong>Tokens stimati (output):</strong> ~${this._esc(approxTokens.toLocaleString())} (${this._esc((approxTokens / 1000).toFixed(1))}K)</p>`;
     if (provider?.maxContextTokens) {
       const pct = Math.round((approxTokens / provider.maxContextTokens) * 100);
       const color = pct > 80 ? 'var(--red-light)' : pct > 50 ? 'var(--amber)' : 'var(--green)';
