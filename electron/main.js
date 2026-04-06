@@ -74,10 +74,12 @@ function validatePath(filePath) {
   } catch (e) {
     return false; // project root doesn't exist (anymore), deny all access
   }
-  // Use path.relative to prevent prefix-matching attacks
-  // e.g. projectRoot="C:\proj" vs resolved="C:\proj-evil"
+
   const relative = path.relative(canonicalRoot, canonical);
-  return relative === '' || (!relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative));
+  // Security: Prevent path traversal out of the project root.
+  // Using path.relative avoids prefix-matching attacks (e.g. projectRoot="C:\proj" vs resolved="C:\proj-evil" -> relative="..\proj-evil").
+  const isInside = !relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative);
+  return relative === '' || isInside;
 }
 
 function createPathValidator(label) {
@@ -160,11 +162,21 @@ ipcMain.handle('fs:exists', async (_event, filePath) => {
 
 ipcMain.handle('settings:load', async () => {
   const settingsPath = path.join(rootDir, 'config', 'settings.json');
-  try {
-    if (fs.existsSync(settingsPath)) {
+  if (fs.existsSync(settingsPath)) {
+    try {
       return JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+    } catch (e) {
+      console.error('[Settings] Error parsing settings.json:', e);
+      try {
+        const backupPath = settingsPath + '.bak.' + Date.now();
+        fs.renameSync(settingsPath, backupPath);
+        console.error('[Settings] Backed up malformed settings.json to:', backupPath);
+      } catch (backupErr) {
+        console.error('[Settings] Failed to back up malformed settings.json:', backupErr);
+      }
+      // Fall through to return default object so the frontend does not crash
     }
-  } catch (e) {}
+  }
   return { providers: {}, activeProvider: null, preferences: {} };
 });
 
@@ -259,27 +271,20 @@ function safeLookup(hostname) {
 function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
   const requestId = ++_nextRequestId;
   return new Promise((resolve) => {
-    let parsedUrl;
-    try {
-      parsedUrl = new URL(url);
-    } catch (e) {
-      return resolve({ requestId, statusCode: 0, body: '', error: 'Invalid URL: ' + e.message });
-    }
+    const parsedUrl = new URL(url);
 
-    safeLookup(parsedUrl.hostname).then((resolvedIP) => {
-      const req = client.request({
-        hostname: resolvedIP, // Use resolved IP to prevent TOCTOU
-        servername: parsedUrl.hostname, // Maintain TLS SNI
-        port: parsedUrl.port || (isHttps ? 443 : 80),
-        path: parsedUrl.pathname + parsedUrl.search,
-        method: 'POST',
-        headers: {
-          'Host': parsedUrl.host, // Crucial for routing if hitting via IP
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(body),
-          'Authorization': authHeader
-        }
-      }, (res) => {
+    const req = client.request({
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || (isHttps ? 443 : 80),
+      path: parsedUrl.pathname + parsedUrl.search,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+        'Authorization': authHeader
+      }
+
+      const req = client.request(reqOptions, (res) => {
       res.setEncoding('utf8');
 
       if (onSseChunk) {
@@ -393,23 +398,22 @@ function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
       }
     });
 
-    pendingRequests.set(requestId, req);
+        pendingRequests.set(requestId, req);
 
-    req.on('error', (err) => {
-      pendingRequests.delete(requestId);
-      resolve({ requestId, statusCode: 0, body: '', error: 'Connection error: ' + (err.message || 'unknown') });
-    });
+        req.on('error', (err) => {
+          pendingRequests.delete(requestId);
+          resolve({ requestId, statusCode: 0, body: '', error: 'Connection error: ' + (err.message || 'unknown') });
+        });
 
-    req.setTimeout(120000, () => {
-      pendingRequests.delete(requestId);
-      req.destroy();
-      resolve({ requestId, statusCode: 0, body: '', error: 'Request timeout' });
-    });
+        req.setTimeout(120000, () => {
+          pendingRequests.delete(requestId);
+          req.destroy();
+          resolve({ requestId, statusCode: 0, body: '', error: 'Request timeout' });
+        });
 
-    req.write(body);
-    req.end();
-    }).catch(e => {
-      resolve({ requestId, statusCode: 0, body: '', error: e.message });
+        req.write(body);
+        req.end();
+      });
     });
   });
 }
@@ -684,11 +688,15 @@ ipcMain.handle('cmd:exec', async (_event, command, cwd) => {
   const args = tokens.slice(1);
 
   const ALLOWED_COMMANDS = ['npm', 'node', 'ls', 'esbuild', 'electron', 'electron-builder'];
-  const baseExe = path.basename(exe);
 
-  if (!ALLOWED_COMMANDS.includes(baseExe)) {
-    return { ok: false, error: `Command rejected: executable '${baseExe}' is not in the allowlist` };
+  if (!ALLOWED_COMMANDS.includes(exe)) {
+    return { ok: false, error: `Command rejected: executable '${exe}' is not in the allowlist` };
   }
+
+  // Windows requires appending .cmd to execute batch scripts without shell: true
+  const isWindows = process.platform === 'win32';
+  const windowsBatchCommands = ['npm', 'esbuild', 'electron', 'electron-builder'];
+  const finalExe = (isWindows && windowsBatchCommands.includes(exe)) ? `${exe}.cmd` : exe;
 
   // Validate cwd against project root
   const effectiveCwd = cwd || projectRoot || rootDir;
@@ -696,9 +704,7 @@ ipcMain.handle('cmd:exec', async (_event, command, cwd) => {
     return { ok: false, error: 'Command rejected: cwd outside project root' };
   }
   return new Promise((resolve) => {
-    // Windows requires shell: true to execute batch scripts like npm.cmd
-    const isWindows = process.platform === 'win32';
-    const child = spawn(exe, args, { cwd: effectiveCwd, timeout: 30000, shell: isWindows });
+    const child = spawn(finalExe, args, { cwd: effectiveCwd, timeout: 30000, shell: false });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', d => { stdout += d.toString(); });
