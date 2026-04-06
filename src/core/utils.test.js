@@ -25,12 +25,12 @@ test('escapeHtml', async (t) => {
   });
 
   await t.test('escapes HTML special characters', () => {
-    assert.strictEqual(escapeHtml('<script>alert("test & pass")</script>'), '&lt;script&gt;alert("test &amp; pass")&lt;/script&gt;');
+    assert.strictEqual(escapeHtml('<script>alert("test & pass")</script>'), '&lt;script&gt;alert(&quot;test &amp; pass&quot;)&lt;/script&gt;');
   });
 
-  await t.test('handles quotes exactly as the browser DOM does', () => {
-    // Note: the browser's innerHTML does not escape double quotes or single quotes when they are text content
-    assert.strictEqual(escapeHtml('< > & " \''), '&lt; &gt; &amp; " \'');
+  await t.test('handles quotes and escapes them properly', () => {
+    // Note: our new implementation escapes double and single quotes to prevent XSS in attributes
+    assert.strictEqual(escapeHtml('< > & " \''), '&lt; &gt; &amp; &quot; &#39;');
   });
 
   await t.test('handles numbers and non-string inputs', () => {
