@@ -200,6 +200,9 @@ class App {
         this.modeManager.setMode(newMode);
         document.getElementById('status-text').textContent = `Mode: ${this.modeManager.getInfo().name}`;
         setTimeout(() => { document.getElementById('status-text').textContent = 'Ready'; }, 2000);
+        // Sync the template dropdown since ModeManager resets the template on mode switch
+        const tmplSelect = document.getElementById('template-select');
+        if (tmplSelect) tmplSelect.value = 'none';
       } catch (e) { /* ignore */ }
     });
 

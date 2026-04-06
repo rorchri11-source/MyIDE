@@ -552,7 +552,15 @@ export default class ChatUI {
   exportChatAsMd() {
     let md = '# MyIDE Chat Session\n\n';
     for (const msg of this.chatHistory) {
-      md += `## ${msg.role === 'user' ? 'User' : 'Assistant'}\n\n${msg.content}\n\n`;
+      let roleLabel = 'User';
+      if (msg.role === 'assistant') roleLabel = 'Assistant';
+      else if (msg.role === 'system') roleLabel = 'System';
+      else if (msg.role === 'tool') roleLabel = `Tool Result (${msg.name})`;
+
+      md += `## ${roleLabel}\n\n${msg.content || ''}\n\n`;
+      if (msg.tool_calls) {
+        md += `### Tool Calls:\n\`\`\`json\n${JSON.stringify(msg.tool_calls, null, 2)}\n\`\`\`\n\n`;
+      }
     }
 
     // Save current session
@@ -599,12 +607,34 @@ export default class ChatUI {
       this.chatHistory = [...session.messages];
       this.messagesEl.innerHTML = '';
       for (const msg of session.messages) {
+        if (msg.role === 'tool' && msg.name) {
+          if (msg.content === 'CANCELLED BY USER: operation not executed.') {
+             this.addMessage('system', `Tool ${msg.name} cancelled by user.`);
+             continue;
+          }
+          this.addToolResultMessage(msg.name, { output: msg.content, error: msg.content?.startsWith('Error:') ? msg.content : null });
+          continue;
+        }
+
+        if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
+          if (msg.content) {
+            const el = this.addMessage('assistant', '');
+            this.finalizeMessage(el, msg.content);
+          }
+          for (const tc of msg.tool_calls) {
+             let args;
+             try { args = JSON.parse(tc.function.arguments); } catch (e) { args = tc.function.arguments; }
+             this.addToolCallMessage(tc.function.name, args);
+          }
+          continue;
+        }
+
         const el = this.messagesEl.appendChild(document.createElement('div'));
         el.className = `message ${msg.role}`;
         if (msg.role === 'assistant') {
-          this.finalizeMessage(el, msg.content);
+          this.finalizeMessage(el, msg.content || '');
         } else {
-          el.textContent = msg.content;
+          el.textContent = msg.content || '';
         }
       }
       this.saveChatSessions(sessions);
