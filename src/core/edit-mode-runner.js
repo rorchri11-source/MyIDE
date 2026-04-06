@@ -1,4 +1,5 @@
 import AIClient, { AIClientFactory } from './ai-client.js';
+import { escapeHtml } from './utils.js';
 
 /**
  * Edit Mode Runner — il sistema AI legge il file, propone un diff
@@ -163,11 +164,11 @@ Explanation: Changed greet to return instead of console.log, added farewell func
       msgEl.className = 'message system diff-confirm-msg';
       msgEl.innerHTML = `
         <div style="padding: 8px 0;">
-          <strong>Modifica proposta per:</strong> <code>${this.chat.escapeHtml(diff.filePath)}</code>
+          <strong>Modifica proposta per:</strong> <code>${escapeHtml(diff.filePath)}</code>
           <pre class="diff-preview" style="font-size: 11px; margin: 8px 0; max-height: 300px; overflow: auto; background: #111; padding: 10px; border-radius: 6px; border: 1px solid var(--border);">${this.renderDiffPreview(diff)}</pre>
           <div style="display: flex; gap: 6px; margin-top: 6px;">
-            <button class="diff-apply-btn" data-file="${this.chat.escapeHtml(diff.filePath)}">✔ Applica</button>
-            <button class="diff-reject-btn" data-file="${this.chat.escapeHtml(diff.filePath)}">✖ Rifiuta</button>
+            <button class="diff-apply-btn" data-file="${escapeHtml(diff.filePath)}">✔ Applica</button>
+            <button class="diff-reject-btn" data-file="${escapeHtml(diff.filePath)}">✖ Rifiuta</button>
           </div>
         </div>`;
       this.chat.messagesEl.appendChild(msgEl);
@@ -175,11 +176,11 @@ Explanation: Changed greet to return instead of console.log, added farewell func
 
       msgEl.querySelector('.diff-apply-btn').addEventListener('click', async () => {
         await this.applyDiff(diff, snapshot);
-        msgEl.innerHTML = `<span style="color: var(--green);">Edit applied to ${this.chat.escapeHtml(diff.filePath)}</span>`;
+        msgEl.innerHTML = `<span style="color: var(--green);">Edit applied to ${escapeHtml(diff.filePath)}</span>`;
       });
 
       msgEl.querySelector('.diff-reject-btn').addEventListener('click', () => {
-        msgEl.innerHTML = `<span style="color: var(--text-muted);">Edit rejected for ${this.chat.escapeHtml(diff.filePath)}</span>`;
+        msgEl.innerHTML = `<span style="color: var(--text-muted);">Edit rejected for ${escapeHtml(diff.filePath)}</span>`;
       });
     }
   }
@@ -187,9 +188,9 @@ Explanation: Changed greet to return instead of console.log, added farewell func
   renderDiffPreview(diff) {
     const lines = diff.diffText.split('\n');
     return lines.map(line => {
-      if (line.startsWith('+')) return `<span style="color: #4ade80;">${this.chat.escapeHtml(line)}</span>`;
-      if (line.startsWith('-')) return `<span style="color: #f87171;">${this.chat.escapeHtml(line)}</span>`;
-      return `<span style="color: var(--text-muted);">${this.chat.escapeHtml(line)}</span>`;
+      if (line.startsWith('+')) return `<span style="color: #4ade80;">${escapeHtml(line)}</span>`;
+      if (line.startsWith('-')) return `<span style="color: #f87171;">${escapeHtml(line)}</span>`;
+      return `<span style="color: var(--text-muted);">${escapeHtml(line)}</span>`;
     }).join('\n');
   }
 
