@@ -65,8 +65,23 @@ function validatePath(filePath) {
   try {
     canonical = fs.realpathSync.native(resolved);
   } catch (e) {
-    // File doesn't exist yet (e.g. fs_write new file) — validate the resolved path
-    canonical = resolved;
+    // File doesn't exist yet (e.g. fs_write new file)
+    // Traverse up to find the closest existing directory to get its realpath
+    let current = resolved;
+    while (true) {
+      try {
+        const real = fs.realpathSync.native(current);
+        canonical = path.join(real, path.relative(current, resolved));
+        break;
+      } catch (err) {
+        const parent = path.dirname(current);
+        if (parent === current) {
+          canonical = resolved; // Reached root without finding existing dir
+          break;
+        }
+        current = parent;
+      }
+    }
   }
   let canonicalRoot;
   try {
