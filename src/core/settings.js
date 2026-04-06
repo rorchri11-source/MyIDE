@@ -3,10 +3,18 @@
  * Niente localStorage — elimina il problema della corruzione.
  */
 
-function deepMergeDefaults(raw, defaults) {
+export function deepMergeDefaults(raw, defaults) {
   const result = {};
   for (const key of Object.keys(defaults)) {
-    if (key in raw && raw[key] !== null && typeof raw[key] === 'object' && !Array.isArray(raw[key])) {
+    if (
+      key in raw &&
+      raw[key] !== null &&
+      typeof raw[key] === 'object' &&
+      !Array.isArray(raw[key]) &&
+      defaults[key] !== null &&
+      typeof defaults[key] === 'object' &&
+      !Array.isArray(defaults[key])
+    ) {
       result[key] = deepMergeDefaults(raw[key], defaults[key]);
     } else if (key in raw) {
       result[key] = raw[key];

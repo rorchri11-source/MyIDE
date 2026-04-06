@@ -247,6 +247,7 @@ export default class ChatUI {
       // Match fenced code blocks that have an explicit filename marker
       const filePattern = /```(?:[\w.+-]+\s+)?(?:filename[:\s=]+)([^\n"`]+)`*\n([\s\S]*?)```/g;
       let match;
+      const writePromises = [];
 
       while ((match = filePattern.exec(fullResponse)) !== null) {
         const filePath = match[1].trim();
@@ -255,11 +256,14 @@ export default class ChatUI {
         if (filePath && content && !filePath.includes('`')) {
           const prefs = this.settings.getPreferences();
           if (prefs.autoApply === 'auto') {
-            await this.writeFile(filePath, content);
+            writePromises.push(this.writeFile(filePath, content));
           } else {
             this.addSystemFileConfirmation(filePath, content);
           }
         }
+      }
+      if (writePromises.length > 0) {
+        await Promise.all(writePromises);
       }
     } catch (e) {
       console.error('File detection error:', e);

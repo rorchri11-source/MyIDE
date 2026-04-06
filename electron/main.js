@@ -4,6 +4,8 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 const https = require('https');
 const http = require('http');
+const net = require('net');
+const dns = require('dns');
 
 const rootDir = path.join(__dirname, '..');
 let mainWindow;
@@ -186,15 +188,84 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function isPrivateIP(ip) {
+  if (net.isIPv4(ip)) {
+    const parts = ip.split('.').map(Number);
+    return (
+      parts[0] === 127 ||
+      parts[0] === 10 ||
+      (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
+      (parts[0] === 192 && parts[1] === 168) ||
+      (parts[0] === 169 && parts[1] === 254) ||
+      parts[0] === 0 ||
+      (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127) ||
+      (parts[0] === 192 && parts[1] === 0 && parts[2] === 0) ||
+      (parts[0] === 192 && parts[1] === 0 && parts[2] === 2) ||
+      (parts[0] === 198 && parts[1] >= 18 && parts[1] <= 19) ||
+      (parts[0] === 198 && parts[1] === 51 && parts[2] === 100) ||
+      (parts[0] === 203 && parts[1] === 0 && parts[2] === 113) ||
+      parts[0] >= 224
+    );
+  } else if (net.isIPv6(ip)) {
+    // Handle IPv4-mapped IPv6 addresses (e.g., ::ffff:127.0.0.1)
+    if (ip.toLowerCase().startsWith('::ffff:')) {
+      const ipv4Part = ip.substring(7);
+      if (net.isIPv4(ipv4Part)) {
+        return isPrivateIP(ipv4Part);
+      }
+    }
+    return (
+      ip === '::1' ||
+      ip === '::' ||
+      ip.toLowerCase().startsWith('fd') ||
+      ip.toLowerCase().startsWith('fc') ||
+      ip.toLowerCase().startsWith('fe8') ||
+      ip.toLowerCase().startsWith('fe9') ||
+      ip.toLowerCase().startsWith('fea') ||
+      ip.toLowerCase().startsWith('feb') ||
+      ip.toLowerCase().startsWith('ff')
+    );
+  }
+  return false;
+}
+
+function safeLookup(hostname, options, callback) {
+  if (typeof options === 'function') {
+    callback = options;
+    options = {};
+  }
+  dns.lookup(hostname, options, (err, address, family) => {
+    if (err) return callback(err);
+    if (Array.isArray(address)) {
+      for (const addr of address) {
+        if (isPrivateIP(addr.address)) {
+          return callback(new Error(`SSRF Protection: Access to internal IP ${addr.address} is blocked.`));
+        }
+      }
+    } else {
+      if (isPrivateIP(address)) {
+        return callback(new Error(`SSRF Protection: Access to internal IP ${address} is blocked.`));
+      }
+    }
+    callback(null, address, family);
+  });
+}
+
 function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
   const requestId = ++_nextRequestId;
   return new Promise((resolve) => {
     const parsedUrl = new URL(url);
+
+    if (net.isIP(parsedUrl.hostname) && isPrivateIP(parsedUrl.hostname)) {
+      return resolve({ requestId, statusCode: 0, body: '', error: `SSRF Protection: Access to internal IP ${parsedUrl.hostname} is blocked.` });
+    }
+
     const req = client.request({
       hostname: parsedUrl.hostname,
       port: parsedUrl.port || (isHttps ? 443 : 80),
       path: parsedUrl.pathname + parsedUrl.search,
       method: 'POST',
+      lookup: safeLookup,
       headers: {
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(body),
@@ -210,9 +281,10 @@ function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
         let errorBody = '';
 
         res.on('data', (chunk) => {
-          errorBody += chunk;
-
-          if (res.statusCode < 200 || res.statusCode >= 300) return;
+          if (res.statusCode < 200 || res.statusCode >= 300) {
+            errorBody += chunk;
+            return;
+          }
 
           sseBuffer += chunk;
 
@@ -256,8 +328,10 @@ function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
                 } catch (e) { /* skip */ }
               }
             }
+            resolve({ requestId, statusCode: res.statusCode, body: '', headers: res.headers });
+          } else {
+            resolve({ requestId, statusCode: res.statusCode, body: errorBody, headers: res.headers });
           }
-          resolve({ requestId, statusCode: res.statusCode, body: errorBody, headers: res.headers });
         });
       } else {
         // Non-streaming path: buffer full body (for ai:sendWithTools)
@@ -357,7 +431,7 @@ ipcMain.handle('ai:sendWithTools', async (event, { config, messages, tools }) =>
   return { error: 'Max retries exceeded' };
 });
 
-ipcMain.handle('ai:send', async (event, { config, messages }) => {
+ipcMain.handle('ai:send', async (event, { config, messages, streamId }) => {
   if (isAIRateLimited()) {
     return { error: 'AI request rejected: rate limit exceeded (10/min)' };
   }
@@ -399,7 +473,7 @@ ipcMain.handle('ai:send', async (event, { config, messages }) => {
     const onSseChunk = (delta, full) => {
       accumulatedContent = full;
       if (event.sender && !event.sender.isDestroyed()) {
-        event.sender.send('ai:chunk', { content: delta });
+        event.sender.send('ai:chunk', { content: delta, streamId });
       }
     };
 
@@ -510,6 +584,13 @@ ipcMain.handle('cmd:exec', async (_event, command, cwd) => {
     return { ok: false, error: 'Command rejected: empty command' };
   }
   const exe = tokens[0];
+
+  const ALLOWED_COMMANDS = ['npm', 'node', 'ls', 'esbuild', 'electron', 'electron-builder'];
+  const baseExe = path.basename(exe);
+
+  if (!ALLOWED_COMMANDS.includes(baseExe)) {
+    return { ok: false, error: `Command rejected: executable '${baseExe}' is not in the allowlist` };
+  }
   const args = tokens.slice(1);
   // Validate cwd against project root
   const effectiveCwd = cwd || rootDir;
