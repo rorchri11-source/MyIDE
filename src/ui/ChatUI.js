@@ -595,7 +595,7 @@ export default class ChatUI {
       if (typeof localStorage !== 'undefined') {
         localStorage.setItem('myide-chat-sessions', data);
       }
-    } catch (e) { /* ignore */ }
+    } catch (e) { console.error(e); }
   }
 
   loadChatSessions() {

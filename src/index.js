@@ -120,8 +120,12 @@ class App {
         if (window.api && self.editor) {
           try {
             const exists = await window.api.fsExists(filePath);
-            if (exists) await self.editor.openFile(filePath);
-          } catch (e) { /* ignore */ }
+            if (exists.ok && exists.exists) await self.editor.openFile(filePath);
+            else if (!exists.ok) {
+              const statusEl = document.getElementById('status-text');
+              if (statusEl) statusEl.textContent = `Error: ${exists.error}`;
+            }
+          } catch (e) { console.error(e); }
         }
       });
 
@@ -167,7 +171,12 @@ class App {
         const result = await window.api.fsOpenFolder();
         if (result.ok) {
           if (window.api.fsSetProjectRoot) {
-            await window.api.fsSetProjectRoot(result.path);
+            const setRootResult = await window.api.fsSetProjectRoot(result.path);
+            if (!setRootResult.ok) {
+              const statusEl = document.getElementById('status-text');
+              if (statusEl) statusEl.textContent = `Error: ${setRootResult.error}`;
+              return;
+            }
           }
           await this.fileTree.loadFolder(result.path);
           const folderEl = document.getElementById('current-folder');
@@ -194,7 +203,11 @@ class App {
     setListener('provider-select', 'change', (e) => {
       const newProvider = e.target.value || null;
       this.settings.setActiveProvider(newProvider);
-      this.settings.save().catch(() => {});
+      this.settings.save().catch((err) => {
+        console.error(err);
+        const statusEl = document.getElementById('status-text');
+        if (statusEl) statusEl.textContent = `Error: ${err.message}`;
+      });
       if (this.chat) this.chat.resetClient();
     });
 
@@ -207,7 +220,7 @@ class App {
         // Sync the template dropdown since ModeManager resets the template on mode switch
         const tmplSelect = document.getElementById('template-select');
         if (tmplSelect) tmplSelect.value = 'none';
-      } catch (e) { /* ignore */ }
+      } catch (e) { console.error(e); }
     });
 
     setListener('template-select', 'change', (e) => {
@@ -393,11 +406,19 @@ class App {
 
     modeEl?.addEventListener('change', async (e) => {
       this.settings.setPreferences({ defaultMode: e.target.value });
-      await this.settings.save().catch(() => {});
+      await this.settings.save().catch((err) => {
+        console.error(err);
+        const statusEl = document.getElementById('status-text');
+        if (statusEl) statusEl.textContent = `Error: ${err.message}`;
+      });
     });
     autoEl?.addEventListener('change', async (e) => {
       this.settings.setPreferences({ autoApply: e.target.value });
-      await this.settings.save().catch(() => {});
+      await this.settings.save().catch((err) => {
+        console.error(err);
+        const statusEl = document.getElementById('status-text');
+        if (statusEl) statusEl.textContent = `Error: ${err.message}`;
+      });
     });
   }
 
@@ -424,8 +445,16 @@ class App {
         e.stopPropagation();
         delete mcpServers[id];
         this.settings.setPreferences({ mcpServers });
-        await this.settings.save().catch(() => {});
-        await window.api.mcpDisconnect(id).catch(() => {});
+        await this.settings.save().catch((err) => {
+          console.error(err);
+          const statusEl = document.getElementById('status-text');
+          if (statusEl) statusEl.textContent = `Error: ${err.message}`;
+        });
+        await window.api.mcpDisconnect(id).catch((err) => {
+          console.error(err);
+          const statusEl = document.getElementById('status-text');
+          if (statusEl) statusEl.textContent = `Error: ${err.message}`;
+        });
         item.remove();
       });
       listEl.appendChild(item);
@@ -555,7 +584,7 @@ class App {
           modal.classList.add('hidden');
           if (this.chat) this.chat.resetClient();
         }
-      } catch (e) { /* ignore */ }
+      } catch (e) { console.error(e); }
     });
 
     // Template auto-fill
@@ -621,7 +650,11 @@ class App {
         });
         item.addEventListener('click', async () => {
           this.settings.setActiveProvider(id);
-          await this.settings.save().catch(() => {});
+          await this.settings.save().catch((err) => {
+            console.error(err);
+            const statusEl = document.getElementById('status-text');
+            if (statusEl) statusEl.textContent = `Error: ${err.message}`;
+          });
           this.updateProviderList();
           this.updateProviderSelect();
         });
@@ -632,7 +665,7 @@ class App {
       if (Object.keys(providers).length === 0) {
         listEl.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-muted)">No providers. Click "+ Add Provider".</div>';
       }
-    } catch (e) { /* ignore */ }
+    } catch (e) { console.error(e); }
   }
 
   editProvider(id) {
@@ -655,7 +688,7 @@ class App {
       document.getElementById('cfg-thinking-budget').value = provider.thinkingBudget ?? 16384;
       document.getElementById('btn-delete-provider').classList.remove('hidden');
       document.getElementById('provider-modal').classList.remove('hidden');
-    } catch (e) { /* ignore */ }
+    } catch (e) { console.error(e); }
   }
 
   updateProviderSelect() {
@@ -676,7 +709,7 @@ class App {
         const modelEl = document.getElementById('model-input');
         if (modelEl) modelEl.value = providers[activeId].model || '';
       }
-    } catch (e) { /* ignore */ }
+    } catch (e) { console.error(e); }
   }
 
   updateModeSelect() {
@@ -734,9 +767,21 @@ class App {
     document.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
-        if (this.editor) this.editor.saveFile().catch(() => {});
-        document.getElementById('status-text').textContent = 'File saved';
-        setTimeout(() => { document.getElementById('status-text').textContent = 'Ready'; }, 2000);
+        if (this.editor) {
+          this.editor.saveFile().then((res) => {
+            if (res && res.ok === false) {
+              const statusEl = document.getElementById('status-text');
+              if (statusEl) statusEl.textContent = `Error: ${res.error}`;
+            } else {
+              document.getElementById('status-text').textContent = 'File saved';
+              setTimeout(() => { document.getElementById('status-text').textContent = 'Ready'; }, 2000);
+            }
+          }).catch((err) => {
+            console.error(err);
+            const statusEl = document.getElementById('status-text');
+            if (statusEl) statusEl.textContent = `Error: ${err.message}`;
+          });
+        }
       }
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'N') {
         e.preventDefault();

@@ -152,7 +152,7 @@ export default class EditorUI {
     this.openTabs[this.currentFile].content = content;
     if (window.api) {
       const result = await window.api.fsWriteFile(this.currentFile, content);
-      return result?.ok;
+      return result;
     }
   }
 
