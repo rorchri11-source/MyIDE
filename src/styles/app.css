@@ -188,7 +188,6 @@ body {
   flex-direction: column;
   flex: 1;
   min-width: 300px;
-  border-right: 1px solid var(--border);
 }
 
 #chat-messages {

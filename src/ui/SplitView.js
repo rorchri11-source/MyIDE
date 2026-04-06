@@ -36,7 +36,7 @@ export default class SplitView {
 
     this._onMouseMove = (e) => {
       if (!this.isDragging) return;
-      const containerRect = this.chatEl.parentElement.getBoundingClientRect();
+      const containerRect = this.editorEl.parentElement.getBoundingClientRect();
       const relativeX = e.clientX - containerRect.left;
       const newRatio = relativeX / containerRect.width;
       this.ratio = Math.max(this.minRatio, Math.min(this.maxRatio, newRatio));
@@ -66,11 +66,11 @@ export default class SplitView {
   createSplitter() {
     this.splitter = document.createElement('div');
     this.splitter.className = 'splitter';
-    this.chatEl.parentElement.insertBefore(this.splitter, this.chatEl.nextSibling);
+    this.editorEl.parentElement.insertBefore(this.splitter, this.editorEl.nextSibling);
   }
 
   apply() {
-    this.chatEl.style.flex = `${this.ratio}`;
-    this.editorEl.style.flex = `${1 - this.ratio}`;
+    this.editorEl.style.flex = `${this.ratio}`;
+    this.chatEl.style.flex = `${1 - this.ratio}`;
   }
 }
