@@ -309,7 +309,7 @@ class App {
     if (useCustom && customText) {
       this.modeManager?.setEffort('custom');
       this.modeManager?.setCustomEffortText(customText);
-      this.chat?.showToast('Prompt personalizzato applicato', 'success');
+      this.chat?.showToast('Custom prompt applied', 'success');
     } else {
       const level = document.getElementById('effort-preset-select')?.value || 'medium';
       this.modeManager?.setEffort(level);
@@ -329,7 +329,7 @@ class App {
     document.getElementById('effort-custom-textarea') && (document.getElementById('effort-custom-textarea').value = '');
     document.getElementById('effort-custom-textarea') && (document.getElementById('effort-custom-textarea').disabled = true);
     this.updateEffortPreview('medium');
-    this.chat?.showToast('Effort resettato a default', 'info');
+    this.chat?.showToast('Effort reset to default', 'info');
   }
 
   changeFontSize(delta) {
@@ -680,9 +680,13 @@ class App {
   }
 
   _esc(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    if (text == null) return '';
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 
   showTokenPanel() {
