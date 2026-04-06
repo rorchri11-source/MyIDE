@@ -132,7 +132,7 @@ export default class AgentRunner {
             const fnName = tc.function.name;
             let args;
             try {
-              args = JSON.parse(tc.function.arguments);
+              args = JSON.parse(tc.function.arguments || '{}');
             } catch (e) {
               this.chat.addMessage('system', `Error parsing tool args for ${fnName}: ${e.message}`);
               this.chat.chatHistory.push({

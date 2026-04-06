@@ -408,6 +408,10 @@ function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
                 } catch (e) { /* skip */ }
               }
             }
+            if (inThinking) {
+              fullContent += '\n</thinking>\n';
+              onSseChunk('\n</thinking>\n', fullContent);
+            }
             resolve({ requestId, statusCode: res.statusCode, body: '', headers: res.headers });
           } else {
             resolve({ requestId, statusCode: res.statusCode, body: errorBody, headers: res.headers });
@@ -762,12 +766,16 @@ ipcMain.handle('mcp:connect', async (_event, id, config) => {
       delete mcpProcesses[id];
     }
     // Validate command against allow-list
-    const MCP_COMMAND_ALLOW_LIST = ['node', 'npx', 'python', 'python3', 'bun', 'deno', 'cargo', 'tsx'];
+    const MCP_COMMAND_ALLOW_LIST = ['node', 'npx', 'npm', 'python', 'python3', 'bun', 'deno', 'cargo', 'tsx'];
     const cmd = path.basename(config.command || '');
     if (!MCP_COMMAND_ALLOW_LIST.includes(cmd)) {
       return { ok: false, error: `MCP command rejected: '${cmd}' is not in the allowed list` };
     }
-    const child = spawn(cmd, config.args || [], {
+    const isWindows = process.platform === 'win32';
+    const windowsBatchCommands = ['npm', 'npx'];
+    const finalCmd = (isWindows && windowsBatchCommands.includes(cmd)) ? `${cmd}.cmd` : cmd;
+
+    const child = spawn(finalCmd, config.args || [], {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, ...(config.env || {}) }
     });
