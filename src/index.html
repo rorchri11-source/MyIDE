@@ -32,12 +32,13 @@
           <option value="explain">Explain</option>
           <option value="refactor">Refactor</option>
         </select>
-        <select id="effort-select" class="select-dark" title="Livello di Sforzo">
-          <option value="medium">⚖️ Bilanciato</option>
-          <option value="off">🚫 No Ragionamento</option>
-          <option value="low">⚡ Rapido</option>
-          <option value="high">🔍 Approfondito</option>
-          <option value="max">🧠 Massimo</option>
+        <select id="effort-select" class="select-dark" title="Effort Level">
+          <option value="medium">⚖️ Balanced</option>
+          <option value="off">🚫 No Reasoning</option>
+          <option value="low">⚡ Quick</option>
+          <option value="high">🔍 Deep</option>
+          <option value="max">🧠 Maximum</option>
+          <option value="custom">✏️ Custom...</option>
         </select>
         <select id="provider-select" class="select-dark">
           <option value="">-- Select Provider --</option>
@@ -45,12 +46,12 @@
         <input id="model-input" class="input-dark" type="text" placeholder="Model">
       </div>
       <div class="topbar-right">
-        <button id="btn-new-chat" class="btn-icon" title="Nuova Chat">&#x2795;</button>
-        <button id="btn-chat-history" class="btn-icon" title="Cronologia Chat">&#x1F4DC;</button>
-        <button id="btn-token-info" class="btn-icon" title="Info Token">&#x1F4CA;</button>
-        <button id="btn-effort-editor" class="btn-icon" title="Editor Prompt Effort">&#x1F527;</button>
-        <button id="btn-help" class="btn-icon" title="Guida">&#x2753;</button>
-        <button id="btn-settings" class="btn-icon" title="Impostazioni">&#9881;</button>
+        <button id="btn-new-chat" class="btn-icon" title="New Chat">&#x2795;</button>
+        <button id="btn-chat-history" class="btn-icon" title="Chat History">&#x1F4DC;</button>
+        <button id="btn-token-info" class="btn-icon" title="Token Info">&#x1F4CA;</button>
+        <button id="btn-effort-editor" class="btn-icon" title="Effort Prompt Editor">&#x1F527;</button>
+        <button id="btn-help" class="btn-icon" title="Help">&#x2753;</button>
+        <button id="btn-settings" class="btn-icon" title="Settings">&#9881;</button>
       </div>
     </div>
 
@@ -242,37 +243,37 @@
     <div id="effort-editor-modal" class="modal hidden">
       <div style="max-width:700px;max-height:85vh;overflow-y:auto;background:var(--panel-bg);border:var(--border);border-radius:var(--radius);padding:20px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-          <h3 style="margin:0;font-size:16px;">Editor Prompt Effort</h3>
+          <h3 style="margin:0;font-size:16px;">Effort Prompt Editor</h3>
           <button id="btn-close-effort-editor" class="btn-small">x</button>
         </div>
         <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">
-          Scegli un preset o scrivi il tuo prompt personalizzato. Il prompt verra' iniettato prima di OGNI richiesta AI.
+          Choose a preset or write your custom prompt. The prompt will be injected before EVERY AI request.
         </p>
         <div class="form-group">
           <label>Preset Template</label>
           <select id="effort-preset-select" class="input-dark" style="width:100%;background:var(--panel-bg);border:var(--border);border-radius:var(--radius);color:var(--text);padding:8px;">
-            <option value="off">🚫 Nessun Ragionamento (modelli senza reasoning)</option>
-            <option value="low">⚡ Rapido (Low Effort)</option>
-            <option value="medium" selected>⚖️ Bilanciato (Medium Effort)</option>
-            <option value="high">🔍 Approfondito (High Effort)</option>
-            <option value="max">🧠 Massimo (Max Effort)</option>
-            <option value="custom">✏️ Personalizzato...</option>
+            <option value="off">🚫 No Reasoning (for models without reasoning)</option>
+            <option value="low">⚡ Quick (Low Effort)</option>
+            <option value="medium" selected>⚖️ Balanced (Medium Effort)</option>
+            <option value="high">🔍 Deep (High Effort)</option>
+            <option value="max">🧠 Maximum (Max Effort)</option>
+            <option value="custom">✏️ Custom...</option>
           </select>
         </div>
         <div class="form-group">
-          <label>Anteprima Prompt Effort</label>
-          <textarea id="effort-preview-textarea" class="input-dark" rows="12" style="font-family:var(--font-mono);font-size:12px;line-height:1.5;" placeholder="Seleziona un preset per vedere il prompt, o scrivi il tuo..."></textarea>
+          <label>Effort Prompt Preview</label>
+          <textarea id="effort-preview-textarea" class="input-dark" rows="12" style="font-family:var(--font-mono);font-size:12px;line-height:1.5;" placeholder="Select a preset to view the prompt, or write your own..."></textarea>
         </div>
         <div class="form-group">
           <label>
             <input id="effort-use-custom" type="checkbox" style="margin-right:6px;">
-            Usa testo personalizzato invece del preset
+            Use Custom Prompt (overrides preset)
           </label>
         </div>
-        <textarea id="effort-custom-textarea" class="input-dark" rows="6" style="font-family:var(--font-mono);font-size:12px;line-height:1.5;" placeholder="Scrivi qui il tuo prompt personalizzato..."></textarea>
+        <textarea id="effort-custom-textarea" class="input-dark" rows="6" style="font-family:var(--font-mono);font-size:12px;line-height:1.5;" placeholder="Write your custom prompt here..."></textarea>
         <div style="display:flex;gap:8px;margin-top:12px;">
-          <button id="btn-apply-effort" class="btn-primary">Applica e Chiudi</button>
-          <button id="btn-reset-effort" class="btn-danger">Reset a Default</button>
+          <button id="btn-apply-effort" class="btn-primary">Apply and Close</button>
+          <button id="btn-reset-effort" class="btn-danger">Reset to Default</button>
         </div>
       </div>
     </div>
