@@ -39,7 +39,9 @@ export default class EditorUI {
         if (result.ok) {
           content = result.content;
         } else {
-          alert(`Error reading file ${filePath}: ${result.error}`);
+          const statusEl = document.getElementById('status-text');
+          if (statusEl) statusEl.textContent = `Error: ${result.error}`;
+          console.error(`Error reading file ${filePath}: ${result.error}`);
           return;
         }
       }
@@ -48,7 +50,9 @@ export default class EditorUI {
       this.renderTabs();
       this.switchTab(filePath);
     } catch (e) {
-      alert(`Error reading file ${filePath}: ${e.message}`);
+      const statusEl = document.getElementById('status-text');
+      if (statusEl) statusEl.textContent = `Error: ${e.message}`;
+      console.error(`Error reading file ${filePath}: ${e.message}`);
       return;
     }
   }

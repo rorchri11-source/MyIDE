@@ -66,7 +66,9 @@ export default class SplitView {
   createSplitter() {
     this.splitter = document.createElement('div');
     this.splitter.className = 'splitter';
-    this.editorEl.parentElement.insertBefore(this.splitter, this.editorEl.nextSibling);
+    // According to memory: The main IDE layout uses `#split-container` governed by `SplitView.js`,
+    // which relies on specific DOM ordering: `#editor-container` positioned on the left and `#chat-panel` on the right.
+    this.editorEl.parentElement.insertBefore(this.splitter, this.chatEl);
   }
 
   apply() {
