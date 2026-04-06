@@ -120,7 +120,7 @@ export default class EditorUI {
       const tab = document.createElement('button');
       tab.className = 'editor-tab' + (this.activeTab === filePath ? ' active' : '');
       tab.dataset.path = filePath;
-      tab.innerHTML = `<span>${escapeHtml(name)}</span><span class="tab-close" data-close="${filePath}">x</span>`;
+      tab.innerHTML = `<span>${escapeHtml(name)}</span><span class="tab-close" data-close="${escapeHtml(filePath)}">x</span>`;
       tab.addEventListener('click', (e) => {
         const closeBtn = e.target.closest('.tab-close');
         if (closeBtn) {
