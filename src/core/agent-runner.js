@@ -48,6 +48,21 @@ export const TOOL_DEFINITIONS = {
         required: ['command']
       }
     }
+  },
+  fs_search: {
+    type: 'function',
+    function: {
+      name: 'fs_search',
+      description: 'Search for text in files using grep. Always use this instead of trying to read entire directories to find something.',
+      parameters: {
+        type: 'object',
+        properties: {
+          pattern: { type: 'string', description: 'Regex pattern to search for' },
+          path: { type: 'string', description: 'Directory to search in (defaults to project root if empty)' }
+        },
+        required: ['pattern']
+      }
+    }
   }
 };
 
@@ -139,9 +154,9 @@ export default class AgentRunner {
                 role: 'tool',
                 tool_call_id: tc.id,
                 name: fnName,
-                content: `Error parsing arguments: ${e.message}`
+                content: `Error parsing arguments: ${e.message}. You must format arguments as valid JSON.`
               });
-              continue;
+              continue; // Auto-retry handled by appending tool error and letting loop continue
             }
 
             this.chat.addToolCallMessage(fnName, args);
@@ -230,7 +245,8 @@ export default class AgentRunner {
   getAgentInstructions() {
     let toolsHint = `- \`fs_read(path)\`: Read ENTIRE file content. Always read before modifying to understand current state.
 - \`fs_write(path, content)\`: Create or overwrite a file. Write the COMPLETE file content — NO patches or diffs.
-- \`cmd_run(command, cwd)\`: Execute a shell command (npm install, node test.js, ls, etc.)`;
+- \`cmd_run(command, cwd)\`: Execute a shell command (npm install, node test.js, ls, etc.)
+- \`fs_search(pattern, path)\`: Fast grep across the codebase.`;
 
     if (this.mcp && this.mcp.availableTools) {
       const mcpTools = Object.keys(this.mcp.availableTools);
@@ -268,9 +284,9 @@ ${toolsHint}
 1. ONE tool call per response. Think carefully before each call.
 2. Always fs_read before fs_write — never assume file contents.
 3. ALWAYS use absolute paths. The directory tree above shows the project root.
-4. If a tool fails, analyze the error and adapt — don't blindly retry the same command.
+4. If a tool fails, analyze the error and adapt — don't blindly retry the same command. If you get a JSON parsing error, correct your JSON payload.
 5. When done, respond with a summary of what you accomplished.
-6. Never modify files you haven't read first (unless creating new files).
+6. Never modify files you haven't read first (unless creating new files). If you need to find where a function is, use \`fs_search\` first.
 7. Skip node_modules, .git, and hidden directories — they are not project code.
 8. Write clean, readable, maintainable code. Add comments where logic isn't obvious.`;
   }
@@ -318,6 +334,22 @@ ${toolsHint}
         return {
           output: truncated,
           message: `Exit code: ${result.exitCode}`
+        };
+      }
+      case 'fs_search': {
+        const cwd = args.path || '.';
+        const escapedPattern = args.pattern.replace(/'/g, "'\\''");
+        // Using ripgrep or grep recursively, ignoring node_modules and .git
+        const cmd = `grep -rnIE --exclude-dir=node_modules --exclude-dir=.git '${escapedPattern}' .`;
+        const result = await window.api.execCommand(cmd, cwd);
+        const output = [result.stdout, result.stderr].filter(Boolean).join('\n') || '(no matches found)';
+        const MAX_OUTPUT = 100000;
+        const truncated = output.length > MAX_OUTPUT
+          ? output.slice(0, MAX_OUTPUT) + '\n\n[... output truncated to ' + MAX_OUTPUT + ' char ...]'
+          : output;
+        return {
+          output: truncated,
+          message: `Search finished. Exit code: ${result.exitCode}`
         };
       }
       default:

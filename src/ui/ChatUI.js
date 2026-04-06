@@ -156,14 +156,21 @@ export default class ChatUI {
 
   /**
    * Durante lo streaming usa textContent (sicuro, nessun crash).
-   * Only renders the full markdown at the end.
+   * Uses requestAnimationFrame to throttle rendering and improve performance on fast streams.
    */
   updateMessageStreaming(msgEl, text) {
-    try {
-      msgEl.textContent = text;
-    } catch (e) {
-      // Fallback se textContent fallisce
-      msgEl.innerText = text;
+    if (!msgEl._pendingText) {
+      msgEl._pendingText = text;
+      requestAnimationFrame(() => {
+        try {
+          msgEl.textContent = msgEl._pendingText;
+        } catch (e) {
+          msgEl.innerText = msgEl._pendingText;
+        }
+        msgEl._pendingText = null;
+      });
+    } else {
+      msgEl._pendingText = text;
     }
   }
 

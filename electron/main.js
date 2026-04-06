@@ -7,6 +7,10 @@ const http = require('http');
 const net = require('net');
 const dns = require('dns');
 
+// Create global HTTP/HTTPS agents with Keep-Alive enabled for better performance
+const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 });
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 10 });
+
 const rootDir = path.join(__dirname, '..');
 let mainWindow;
 
@@ -301,11 +305,13 @@ function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
       path: parsedUrl.pathname + parsedUrl.search,
       method: 'POST',
       servername: originalHostname,
+      agent: isHttps ? httpsAgent : httpAgent,
       headers: {
         'Host': originalHostname,
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(body),
-        'Authorization': authHeader
+        'Authorization': authHeader,
+        'Connection': 'keep-alive'
       }
     };
 
@@ -714,7 +720,7 @@ ipcMain.handle('cmd:exec', async (_event, command, cwd) => {
   const exe = tokens[0];
   const args = tokens.slice(1);
 
-  const ALLOWED_COMMANDS = ['npm', 'node', 'ls', 'esbuild', 'electron', 'electron-builder'];
+  const ALLOWED_COMMANDS = ['npm', 'node', 'ls', 'esbuild', 'electron', 'electron-builder', 'grep'];
 
   if (!ALLOWED_COMMANDS.includes(exe)) {
     return { ok: false, error: `Command rejected: executable '${exe}' is not in the allowlist` };

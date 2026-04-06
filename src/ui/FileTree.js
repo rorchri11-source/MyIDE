@@ -45,10 +45,17 @@ export default class FileTree {
       el.style.paddingLeft = `${8 + depth * 12}px`;
       el.dataset.path = item.path;
 
-      const iconChar = item.isDirectory ? (item._expanded ? '▾' : '▸') : '·';
+      if (item.isDirectory && item._expanded) {
+        el.dataset.expanded = "true";
+      }
+
+      // Use a consistent icon for directory and let CSS rotate it
+      const iconChar = item.isDirectory ? '▸' : '📄';
       el.innerHTML = `<span class="icon">${iconChar}</span><span>${escapeHtml(item.name)}</span>`;
 
-      el.addEventListener('click', async () => {
+      el.addEventListener('click', async (e) => {
+        // Prevent click events from firing too rapidly and re-rendering unnecessarily
+        e.stopPropagation();
         if (item.isDirectory) {
           item._expanded = !item._expanded;
           if (item._expanded && !item.children) {
