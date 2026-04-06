@@ -36,4 +36,13 @@ test('buildEffortPrompt', async (t) => {
     assert.ok(result.startsWith(THINKING_WITH_TOOLS));
     assert.ok(result.includes('Effort: Medium'));
   });
+
+  await t.test('falls back to medium directive for missing or falsy levels', () => {
+    const falsyValues = [undefined, null, '', false, 0];
+    for (const val of falsyValues) {
+      const result = buildEffortPrompt(val);
+      assert.ok(result.startsWith(THINKING_WITH_TOOLS), `Failed for value: ${String(val)}`);
+      assert.ok(result.includes('Effort: Medium'), `Failed for value: ${String(val)}`);
+    }
+  });
 });
