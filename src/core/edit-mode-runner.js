@@ -228,6 +228,8 @@ Explanation: Changed greet to return instead of console.log, added farewell func
         await window.api.fsWriteFile(diff.filePath, diff.newContent);
         if (this.editor.currentFile === diff.filePath) {
           this.editor.setContent(diff.newContent);
+        } else if (this.chat.onFileCreatedCallback) {
+          this.chat.onFileCreatedCallback(diff.filePath, diff.newContent);
         }
         return;
       }
@@ -244,6 +246,8 @@ Explanation: Changed greet to return instead of console.log, added farewell func
       await window.api.fsWriteFile(diff.filePath, result.content);
       if (this.editor.currentFile === diff.filePath) {
         this.editor.setContent(result.content);
+      } else if (this.chat.onFileCreatedCallback) {
+        this.chat.onFileCreatedCallback(diff.filePath, result.content);
       }
     } catch (e) {
       this.chat.addMessage('system', `Error: ${e.message}`);

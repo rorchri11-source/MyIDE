@@ -448,8 +448,8 @@ export default class ChatUI {
       await this.detectAndCreateFiles(finalResponse);
 
     } catch (error) {
-      typingEl.remove();
-      if (assistantEl && !assistantEl.textContent.trim()) {
+      if (typingEl && typingEl.parentNode) typingEl.remove();
+      if (typeof assistantEl !== 'undefined' && assistantEl && !assistantEl.textContent.trim()) {
         assistantEl.remove();
       }
       this.handleError(error);
