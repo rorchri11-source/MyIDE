@@ -311,11 +311,21 @@ export default class ChatUI {
     if (!window.api) return;
     try {
       const result = await window.api.fsWriteFile(filePath, content);
-      if (result.ok && this.onFileCreatedCallback) {
-        this.onFileCreatedCallback(filePath, content);
+      if (result.ok) {
+        if (this.onFileCreatedCallback) {
+          this.onFileCreatedCallback(filePath, content);
+        }
+      } else {
+        this.addMessage('system', `Error writing file: ${result.error}`);
+        const statusEl = document.getElementById('status-text');
+        if (statusEl) statusEl.textContent = `Error: ${result.error}`;
+        console.error(`Error writing file ${filePath}: ${result.error}`);
       }
     } catch (e) {
       this.addMessage('system', `Error writing file: ${e.message}`);
+      const statusEl = document.getElementById('status-text');
+      if (statusEl) statusEl.textContent = `Error: ${e.message}`;
+      console.error(`Error writing file ${filePath}: ${e.message}`);
     }
   }
 
