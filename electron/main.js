@@ -605,11 +605,15 @@ ipcMain.handle('cmd:exec', async (_event, command, cwd) => {
   const args = tokens.slice(1);
 
   const ALLOWED_COMMANDS = ['npm', 'node', 'ls', 'esbuild', 'electron', 'electron-builder'];
-  const baseExe = path.basename(exe);
 
-  if (!ALLOWED_COMMANDS.includes(baseExe)) {
-    return { ok: false, error: `Command rejected: executable '${baseExe}' is not in the allowlist` };
+  if (!ALLOWED_COMMANDS.includes(exe)) {
+    return { ok: false, error: `Command rejected: executable '${exe}' is not in the allowlist` };
   }
+
+  // Windows requires appending .cmd to execute batch scripts without shell: true
+  const isWindows = process.platform === 'win32';
+  const windowsBatchCommands = ['npm', 'esbuild', 'electron', 'electron-builder'];
+  const finalExe = (isWindows && windowsBatchCommands.includes(exe)) ? `${exe}.cmd` : exe;
 
   // Validate cwd against project root
   const effectiveCwd = cwd || projectRoot || rootDir;
@@ -617,9 +621,7 @@ ipcMain.handle('cmd:exec', async (_event, command, cwd) => {
     return { ok: false, error: 'Command rejected: cwd outside project root' };
   }
   return new Promise((resolve) => {
-    // Windows requires shell: true to execute batch scripts like npm.cmd
-    const isWindows = process.platform === 'win32';
-    const child = spawn(exe, args, { cwd: effectiveCwd, timeout: 30000, shell: isWindows });
+    const child = spawn(finalExe, args, { cwd: effectiveCwd, timeout: 30000, shell: false });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', d => { stdout += d.toString(); });
