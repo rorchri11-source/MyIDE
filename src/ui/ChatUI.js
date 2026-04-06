@@ -638,7 +638,7 @@ export default class ChatUI {
         } else {
           let html = '<div style="padding: 4px 0;"><strong>Chat History</strong></div>';
           updatedSessions.forEach((s, i) => {
-            html += `<div class="chat-session-item" data-index="${i}"><span class="chat-session-name">${escapeHtml(s.name)} (${s.messages.length} msg)</span><span class="chat-session-date">${s.date}</span><button class="chat-session-delete" data-index="${i}">&#10005;</button></div>`;
+            html += `<div class="chat-session-item" data-index="${i}"><span class="chat-session-name">${escapeHtml(s.name)} (${escapeHtml(String(s.messages.length))} msg)</span><span class="chat-session-date">${escapeHtml(s.date)}</span><button class="chat-session-delete" data-index="${i}">&#10005;</button></div>`;
           });
           msgEl.innerHTML = html;
           this._bindSessionListEvents(msgEl, updatedSessions);
@@ -658,7 +658,7 @@ export default class ChatUI {
     msgEl.className = 'message system';
     let html = '<div style="padding: 4px 0;"><strong>Chat History</strong></div>';
     sessions.forEach((s, i) => {
-      html += `<div class="chat-session-item" data-index="${i}"><span class="chat-session-name">${escapeHtml(s.name)} (${s.messages.length} msg)</span><span class="chat-session-date">${s.date}</span><button class="chat-session-delete" data-index="${i}">&#10005;</button></div>`;
+      html += `<div class="chat-session-item" data-index="${i}"><span class="chat-session-name">${escapeHtml(s.name)} (${escapeHtml(String(s.messages.length))} msg)</span><span class="chat-session-date">${escapeHtml(s.date)}</span><button class="chat-session-delete" data-index="${i}">&#10005;</button></div>`;
     });
     msgEl.innerHTML = html;
     this._bindSessionListEvents(msgEl, sessions);
