@@ -49,7 +49,7 @@ Explanation: Changed greet to return instead of console.log, added farewell func
     let client = null;
     try {
       if (!this.editor.currentFile) {
-        this.chat.addMessage('system', 'Errore: nessun file aperto. Apri un file prima di usare la modalita Edit.');
+        this.chat.addMessage('system', 'Error: no open file. Open a file before using Edit mode.');
         return;
       }
 
@@ -129,7 +129,7 @@ Explanation: Changed greet to return instead of console.log, added farewell func
       this.finalizeResponse(assistantEl, finalResponseChecked, fileSnapshot);
     } catch (error) {
       console.error('Edit mode error:', error);
-      this.chat.addMessage('system', `Errore: ${error.message}`);
+      this.chat.addMessage('system', `Error: ${error.message}`);
     } finally {
       this._activeClient = null;
       if (client && typeof client.destroy === 'function') {
@@ -205,11 +205,11 @@ Explanation: Changed greet to return instead of console.log, added farewell func
 
       msgEl.querySelector('.diff-apply-btn').addEventListener('click', async () => {
         await this.applyDiff(diff, snapshot);
-        msgEl.innerHTML = `<span style="color: var(--green);">Modifica applicata a ${this.chat.escapeHtml(diff.filePath)}</span>`;
+        msgEl.innerHTML = `<span style="color: var(--green);">Edit applied to ${this.chat.escapeHtml(diff.filePath)}</span>`;
       });
 
       msgEl.querySelector('.diff-reject-btn').addEventListener('click', () => {
-        msgEl.innerHTML = `<span style="color: var(--text-muted);">Modifica rifiutata per ${this.chat.escapeHtml(diff.filePath)}</span>`;
+        msgEl.innerHTML = `<span style="color: var(--text-muted);">Edit rejected for ${this.chat.escapeHtml(diff.filePath)}</span>`;
       });
     }
   }
@@ -225,7 +225,7 @@ Explanation: Changed greet to return instead of console.log, added farewell func
 
   validateFilePath(filePath) {
     if (!filePath || !filePath.trim()) {
-      return { ok: false, error: 'Path vuoto' };
+      return { ok: false, error: 'Empty path' };
     }
     // Allow the exact current file (normalized comparison)
     const normalize = p => p.replace(/\\/g, '/').toLowerCase();
@@ -235,11 +235,11 @@ Explanation: Changed greet to return instead of console.log, added farewell func
     }
     // Reject path traversal components
     if (filePath.includes('..')) {
-      return { ok: false, error: `Path rifiutata: path traversal rilevato in '${filePath}'` };
+      return { ok: false, error: `Path rejected: path traversal detected in '${filePath}'` };
     }
     // Reject absolute paths that don't match the current file
     if (/^[a-zA-Z]:/.test(filePath) || filePath.startsWith('/')) {
-      return { ok: false, error: `Path rifiutata: percorso assoluto '${filePath}'` };
+      return { ok: false, error: `Path rejected: absolute path '${filePath}'` };
     }
     return { ok: true };
   }
@@ -249,7 +249,7 @@ Explanation: Changed greet to return instead of console.log, added farewell func
       // Validate file path against path traversal
       const validation = this.validateFilePath(diff.filePath);
       if (!validation.ok) {
-        this.chat.addMessage('system', `Sicurezza: ${validation.error}`);
+        this.chat.addMessage('system', `Security: ${validation.error}`);
         return;
       }
 
@@ -267,7 +267,7 @@ Explanation: Changed greet to return instead of console.log, added farewell func
       const result = await this.applyUnifiedDiff(currentContent, diff.diffText);
 
       if (result.error) {
-        this.chat.addMessage('system', `Errore applicazione diff: ${result.error}`);
+        this.chat.addMessage('system', `Error applying diff: ${result.error}`);
         return;
       }
 
@@ -276,7 +276,7 @@ Explanation: Changed greet to return instead of console.log, added farewell func
         this.editor.setContent(result.content);
       }
     } catch (e) {
-      this.chat.addMessage('system', `Errore: ${e.message}`);
+      this.chat.addMessage('system', `Error: ${e.message}`);
     }
   }
 

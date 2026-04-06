@@ -212,6 +212,8 @@ function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
         let lineStart = 0;
         let errorBody = '';
 
+        let inThinking = false;
+
         res.on('data', (chunk) => {
           if (res.statusCode < 200 || res.statusCode >= 300) {
             errorBody += chunk;
@@ -229,10 +231,30 @@ function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
               const data = line.replace(/^data:\s*/, '');
               if (data === '[DONE]' || !data) continue;
               try {
-                const delta = JSON.parse(data).choices?.[0]?.delta?.content;
+                const parsed = JSON.parse(data);
+                const delta = parsed.choices?.[0]?.delta;
                 if (delta) {
-                  fullContent += delta;
-                  onSseChunk(delta, fullContent);
+                  let chunkContent = '';
+                  // Wrap reasoning_content in <thinking> tags if provided
+                  if (delta.reasoning_content) {
+                    chunkContent = delta.reasoning_content;
+                    if (!inThinking) {
+                      inThinking = true;
+                      chunkContent = '<thinking>\n' + chunkContent;
+                    }
+                  } else if (delta.content != null) {
+                    if (inThinking) {
+                      inThinking = false;
+                      chunkContent = '\n</thinking>\n' + delta.content;
+                    } else {
+                      chunkContent = delta.content;
+                    }
+                  }
+
+                  if (chunkContent) {
+                    fullContent += chunkContent;
+                    onSseChunk(chunkContent, fullContent);
+                  }
                 }
               } catch (e) {
                 // Non-JSON SSE lines — skip
@@ -252,10 +274,29 @@ function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
               const data = lastLine.replace(/^data:\s*/, '');
               if (data !== '[DONE]' && data) {
                 try {
-                  const delta = JSON.parse(data).choices?.[0]?.delta?.content;
+                  const parsed = JSON.parse(data);
+                  const delta = parsed.choices?.[0]?.delta;
                   if (delta) {
-                    fullContent += delta;
-                    onSseChunk(delta, fullContent);
+                    let chunkContent = '';
+                    if (delta.reasoning_content) {
+                      if (!inThinking) {
+                        inThinking = true;
+                        chunkContent = '<thinking>\n' + delta.reasoning_content;
+                      } else {
+                        chunkContent = delta.reasoning_content;
+                      }
+                    } else if (delta.content != null) {
+                      if (inThinking) {
+                        inThinking = false;
+                        chunkContent = '\n</thinking>\n' + delta.content;
+                      } else {
+                        chunkContent = delta.content;
+                      }
+                    }
+                    if (chunkContent) {
+                      fullContent += chunkContent;
+                      onSseChunk(chunkContent, fullContent);
+                    }
                   }
                 } catch (e) { /* skip */ }
               }
@@ -298,12 +339,12 @@ ipcMain.handle('ai:sendWithTools', async (event, { config, messages, tools }) =>
   if (isAIRateLimited()) {
     return { error: 'AI request rejected: rate limit exceeded (10/min)' };
   }
-  const { baseUrl, apiKey, model, temperature, maxTokens } = config;
+  const { baseUrl, apiKey, model, temperature, maxTokens, thinking, thinkingBudget } = config;
 
   console.log('[AI] Attempting request with tools to:', baseUrl, 'model:', model);
 
   if (!baseUrl || !apiKey || !model) {
-    return { error: 'Provider non configurato: mancano URL, API key o modello.' };
+    return { error: 'Provider not configured: missing URL, API key, or model.' };
   }
 
   const url = baseUrl.replace(/\/+$/, '') + '/chat/completions';
@@ -311,14 +352,22 @@ ipcMain.handle('ai:sendWithTools', async (event, { config, messages, tools }) =>
   const client = isHttps ? https : http;
   const authHeader = 'Bearer ' + apiKey;
 
-  const body = JSON.stringify({
+  const bodyObj = {
     model,
     messages,
     tools,
     temperature: temperature ?? 0.7,
     max_tokens: maxTokens ?? 4096,
     stream: false // tool_use non supportato con streaming su tutti i provider
-  });
+  };
+
+  if (thinking) {
+    const budget = thinkingBudget || 16384;
+    bodyObj.max_tokens = Math.max(bodyObj.max_tokens, budget + 1024, 8192);
+    bodyObj.thinking = { type: 'enabled', budget_tokens: budget };
+  }
+
+  const body = JSON.stringify(bodyObj);
 
   let retries = 0;
   while (retries < MAX_RETRIES) {
@@ -331,7 +380,7 @@ ipcMain.handle('ai:sendWithTools', async (event, { config, messages, tools }) =>
 
     if (res.statusCode === 429 || res.statusCode === 503) {
       if (retries >= MAX_RETRIES) {
-        return { error: `API Error ${res.statusCode}: Troppe richieste. Attendi qualche minuto.` };
+        return { error: `API Error ${res.statusCode}: Too many requests. Please wait a few minutes.` };
       }
       const retryAfter = parseInt(res.headers['retry-after'] || '30', 10);
       const delayMs = Math.min(retryAfter * 1000, RETRY_BASE_DELAY * Math.pow(2, retries - 1));
@@ -348,15 +397,22 @@ ipcMain.handle('ai:sendWithTools', async (event, { config, messages, tools }) =>
       const parsed = JSON.parse(res.body);
       const choice = parsed.choices?.[0];
       if (choice?.message) {
-        const resp = { content: choice.message.content || '' };
+        let textContent = choice.message.content || '';
+
+        // Wrap reasoning_content in <thinking> for non-streaming too
+        if (choice.message.reasoning_content) {
+           textContent = `<thinking>\n${choice.message.reasoning_content}\n</thinking>\n${textContent}`;
+        }
+
+        const resp = { content: textContent };
         if (choice.message.tool_calls) {
           resp.tool_calls = choice.message.tool_calls;
         }
         return resp;
       }
-      return { error: 'Risposta non valida: ' + res.body.slice(0, 500) };
+      return { error: 'Invalid response: ' + res.body.slice(0, 500) };
     } catch (e) {
-      return { error: 'Risposta non valida: ' + res.body.slice(0, 300) };
+      return { error: 'Invalid response: ' + res.body.slice(0, 300) };
     }
   }
 
@@ -373,7 +429,7 @@ ipcMain.handle('ai:send', async (event, { config, messages, streamId }) => {
 
   if (!baseUrl || !apiKey || !model) {
     console.error('[AI] Missing config:', { baseUrl: !!baseUrl, apiKey: !!apiKey, model: !!model });
-    return { error: 'Provider non configurato: mancano URL, API key o modello.' };
+    return { error: 'Provider not configured: missing URL, API key, or model.' };
   }
 
   const url = baseUrl.replace(/\/+$/, '') + '/chat/completions';
@@ -390,8 +446,9 @@ ipcMain.handle('ai:send', async (event, { config, messages, streamId }) => {
     stream: true
   };
   if (thinking) {
-    bodyObj.max_tokens = Math.max(bodyObj.max_tokens, thinkingBudget || 16384, 8192);
-    bodyObj.thinking = { type: 'enabled', budget_tokens: thinkingBudget || 16384 };
+    const budget = thinkingBudget || 16384;
+    bodyObj.max_tokens = Math.max(bodyObj.max_tokens, budget + 1024, 8192);
+    bodyObj.thinking = { type: 'enabled', budget_tokens: budget };
   }
   const fullBody = JSON.stringify(bodyObj);
 
@@ -428,7 +485,7 @@ ipcMain.handle('ai:send', async (event, { config, messages, streamId }) => {
 
     if (res.statusCode === 429 || res.statusCode === 503) {
       if (retries >= MAX_RETRIES) {
-        return { error: `API Error ${res.statusCode}: Troppe richieste. Attendi qualche minuto.` };
+        return { error: `API Error ${res.statusCode}: Too many requests. Please wait a few minutes.` };
       }
       const retryAfter = parseInt(res.headers['retry-after'] || '30', 10);
       const delayMs = Math.min(retryAfter * 1000, RETRY_BASE_DELAY * Math.pow(2, retries - 1));
@@ -445,7 +502,7 @@ ipcMain.handle('ai:send', async (event, { config, messages, streamId }) => {
     // 5xx errors — retry with backoff
     if (res.statusCode >= 500) {
       if (retries >= MAX_RETRIES) {
-        return { error: `API Error ${res.statusCode}: Server error dopo ${MAX_RETRIES} tentativi.` };
+        return { error: `API Error ${res.statusCode}: Server error after ${MAX_RETRIES} attempts.` };
       }
       await delay(RETRY_BASE_DELAY * Math.pow(2, retries - 1));
       continue;
@@ -504,18 +561,48 @@ ipcMain.handle('ai:cancel', async (_event, requestId) => {
 
 ipcMain.handle('cmd:exec', async (_event, command, cwd) => {
   // Block shell metacharacters that allow command chaining, piping, subshell, globbing
-  if (/[;|&$`<>\\(){}!\[\]*?~%\^'"\n\r]/.test(command)) {
+  // Allow quotes for complex arguments
+  if (/[;|&$`<>\\(){}!\[\]*?~%\^\n\r]/.test(command)) {
     return { ok: false, error: 'Command rejected: invalid characters not allowed' };
   }
   if (isCommandRateLimited()) {
     return { ok: false, error: 'Command rejected: rate limit exceeded (5/min)' };
   }
-  // Parse executable + args from the command string
-  const tokens = command.trim().split(/\s+/).filter(Boolean);
+  // Parse executable + args from the command string respecting quotes
+  const tokens = [];
+  let currentToken = '';
+  let inQuote = null;
+
+  for (let i = 0; i < command.length; i++) {
+    const char = command[i];
+    if (inQuote) {
+      if (char === inQuote) {
+        inQuote = null;
+      } else {
+        currentToken += char;
+      }
+    } else {
+      if (char === "'" || char === '"') {
+        inQuote = char;
+      } else if (/\s/.test(char)) {
+        if (currentToken.length > 0) {
+          tokens.push(currentToken);
+          currentToken = '';
+        }
+      } else {
+        currentToken += char;
+      }
+    }
+  }
+  if (currentToken.length > 0) {
+    tokens.push(currentToken);
+  }
+
   if (tokens.length === 0) {
     return { ok: false, error: 'Command rejected: empty command' };
   }
   const exe = tokens[0];
+  const args = tokens.slice(1);
 
   const ALLOWED_COMMANDS = ['npm', 'node', 'ls', 'esbuild', 'electron', 'electron-builder'];
   const baseExe = path.basename(exe);
@@ -523,14 +610,16 @@ ipcMain.handle('cmd:exec', async (_event, command, cwd) => {
   if (!ALLOWED_COMMANDS.includes(baseExe)) {
     return { ok: false, error: `Command rejected: executable '${baseExe}' is not in the allowlist` };
   }
-  const args = tokens.slice(1);
+
   // Validate cwd against project root
-  const effectiveCwd = cwd || rootDir;
+  const effectiveCwd = cwd || projectRoot || rootDir;
   if (!validatePath(effectiveCwd)) {
     return { ok: false, error: 'Command rejected: cwd outside project root' };
   }
   return new Promise((resolve) => {
-    const child = spawn(exe, args, { cwd: effectiveCwd, timeout: 30000 });
+    // Windows requires shell: true to execute batch scripts like npm.cmd
+    const isWindows = process.platform === 'win32';
+    const child = spawn(exe, args, { cwd: effectiveCwd, timeout: 30000, shell: isWindows });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', d => { stdout += d.toString(); });
@@ -643,7 +732,7 @@ ipcMain.handle('mcp:connect', async (_event, id, config) => {
 
 ipcMain.handle('mcp:call-tool', async (_event, serverId, toolName, args) => {
   const proc = mcpProcesses[serverId];
-  if (!proc) return { error: `Server ${serverId} non connesso` };
+  if (!proc) return { error: `Server ${serverId} not connected` };
 
   return new Promise((resolve) => {
     // Use incremental counter for collision-free reqIds
