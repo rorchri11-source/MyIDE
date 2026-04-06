@@ -65,8 +65,23 @@ function validatePath(filePath) {
   try {
     canonical = fs.realpathSync.native(resolved);
   } catch (e) {
-    // File doesn't exist yet (e.g. fs_write new file) — validate the resolved path
-    canonical = resolved;
+    // File doesn't exist yet (e.g. fs_write new file)
+    // Traverse up to find the closest existing directory to get its realpath
+    let current = resolved;
+    while (true) {
+      try {
+        const real = fs.realpathSync.native(current);
+        canonical = path.join(real, path.relative(current, resolved));
+        break;
+      } catch (err) {
+        const parent = path.dirname(current);
+        if (parent === current) {
+          canonical = resolved; // Reached root without finding existing dir
+          break;
+        }
+        current = parent;
+      }
+    }
   }
   let canonicalRoot;
   try {
@@ -74,10 +89,12 @@ function validatePath(filePath) {
   } catch (e) {
     return false; // project root doesn't exist (anymore), deny all access
   }
-  // Use path.relative to prevent prefix-matching attacks
-  // e.g. projectRoot="C:\proj" vs resolved="C:\proj-evil"
+
   const relative = path.relative(canonicalRoot, canonical);
-  return relative === '' || (!relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative));
+  // Security: Prevent path traversal out of the project root.
+  // Using path.relative avoids prefix-matching attacks (e.g. projectRoot="C:\proj" vs resolved="C:\proj-evil" -> relative="..\proj-evil").
+  const isInside = !relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative);
+  return relative === '' || isInside;
 }
 
 function createPathValidator(label) {
@@ -160,11 +177,21 @@ ipcMain.handle('fs:exists', async (_event, filePath) => {
 
 ipcMain.handle('settings:load', async () => {
   const settingsPath = path.join(rootDir, 'config', 'settings.json');
-  try {
-    if (fs.existsSync(settingsPath)) {
+  if (fs.existsSync(settingsPath)) {
+    try {
       return JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+    } catch (e) {
+      console.error('[Settings] Error parsing settings.json:', e);
+      try {
+        const backupPath = settingsPath + '.bak.' + Date.now();
+        fs.renameSync(settingsPath, backupPath);
+        console.error('[Settings] Backed up malformed settings.json to:', backupPath);
+      } catch (backupErr) {
+        console.error('[Settings] Failed to back up malformed settings.json:', backupErr);
+      }
+      // Fall through to return default object so the frontend does not crash
     }
-  } catch (e) {}
+  }
   return { providers: {}, activeProvider: null, preferences: {} };
 });
 
@@ -188,6 +215,74 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function isPrivateIP(ip) {
+  // IPv4 mapped IPv6
+  if (ip.startsWith('::ffff:')) {
+    ip = ip.replace('::ffff:', '');
+  }
+
+  // IPv6 localhost and unspecified
+  if (ip === '::1' || ip === '::' || ip === '0:0:0:0:0:0:0:1') return true;
+
+  // Simple IPv4 blocks
+  const parts = ip.split('.');
+  if (parts.length === 4) {
+    const [a, b] = parts.map(Number);
+    if (
+      a === 0 || // Current network
+      a === 10 || // Private
+      a === 127 || // Loopback
+      (a === 100 && b >= 64 && b <= 127) || // Carrier-grade NAT
+      (a === 169 && b === 254) || // Link-local
+      (a === 172 && b >= 16 && b <= 31) || // Private
+      a === 192 && b === 168 || // Private
+      a === 192 && b === 0 && parts[2] === '0' || // IETF Protocol Assignments
+      a === 192 && b === 0 && parts[2] === '2' || // TEST-NET-1
+      a === 198 && b >= 18 && b <= 19 || // Benchmark Tests
+      a === 198 && b === 51 && parts[2] === '100' || // TEST-NET-2
+      a === 203 && b === 0 && parts[2] === '113' || // TEST-NET-3
+      a >= 224 // Multicast and reserved
+    ) {
+      return true;
+    }
+  } else if (ip.includes(':')) {
+    // IPv6 Private / Link-local / Unique Local
+    const lowerIP = ip.toLowerCase();
+    if (
+      lowerIP.startsWith('fc') ||
+      lowerIP.startsWith('fd') ||
+      lowerIP.startsWith('fe8') ||
+      lowerIP.startsWith('fe9') ||
+      lowerIP.startsWith('fea') ||
+      lowerIP.startsWith('feb')
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function safeLookup(hostname) {
+  return new Promise((resolve, reject) => {
+    // If hostname is already an IP, we validate it directly.
+    if (net.isIP(hostname)) {
+      if (isPrivateIP(hostname)) {
+        return reject(new Error(`SSRF blocked: ${hostname} is a private IP`));
+      }
+      return resolve(hostname);
+    }
+
+    dns.lookup(hostname, (err, address, family) => {
+      if (err) return reject(err);
+      if (isPrivateIP(address)) {
+        return reject(new Error(`SSRF blocked: Resolved IP ${address} is private`));
+      }
+      resolve(address);
+    });
+  });
+}
+
 function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
   const requestId = ++_nextRequestId;
   return new Promise((resolve) => {
@@ -203,7 +298,8 @@ function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
         'Content-Length': Buffer.byteLength(body),
         'Authorization': authHeader
       }
-    }, (res) => {
+
+      const req = client.request(reqOptions, (res) => {
       res.setEncoding('utf8');
 
       if (onSseChunk) {
@@ -317,21 +413,23 @@ function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
       }
     });
 
-    pendingRequests.set(requestId, req);
+        pendingRequests.set(requestId, req);
 
-    req.on('error', (err) => {
-      pendingRequests.delete(requestId);
-      resolve({ requestId, statusCode: 0, body: '', error: 'Connection error: ' + (err.message || 'unknown') });
+        req.on('error', (err) => {
+          pendingRequests.delete(requestId);
+          resolve({ requestId, statusCode: 0, body: '', error: 'Connection error: ' + (err.message || 'unknown') });
+        });
+
+        req.setTimeout(120000, () => {
+          pendingRequests.delete(requestId);
+          req.destroy();
+          resolve({ requestId, statusCode: 0, body: '', error: 'Request timeout' });
+        });
+
+        req.write(body);
+        req.end();
+      });
     });
-
-    req.setTimeout(120000, () => {
-      pendingRequests.delete(requestId);
-      req.destroy();
-      resolve({ requestId, statusCode: 0, body: '', error: 'Request timeout' });
-    });
-
-    req.write(body);
-    req.end();
   });
 }
 
@@ -605,11 +703,15 @@ ipcMain.handle('cmd:exec', async (_event, command, cwd) => {
   const args = tokens.slice(1);
 
   const ALLOWED_COMMANDS = ['npm', 'node', 'ls', 'esbuild', 'electron', 'electron-builder'];
-  const baseExe = path.basename(exe);
 
-  if (!ALLOWED_COMMANDS.includes(baseExe)) {
-    return { ok: false, error: `Command rejected: executable '${baseExe}' is not in the allowlist` };
+  if (!ALLOWED_COMMANDS.includes(exe)) {
+    return { ok: false, error: `Command rejected: executable '${exe}' is not in the allowlist` };
   }
+
+  // Windows requires appending .cmd to execute batch scripts without shell: true
+  const isWindows = process.platform === 'win32';
+  const windowsBatchCommands = ['npm', 'esbuild', 'electron', 'electron-builder'];
+  const finalExe = (isWindows && windowsBatchCommands.includes(exe)) ? `${exe}.cmd` : exe;
 
   // Validate cwd against project root
   const effectiveCwd = cwd || projectRoot || rootDir;
@@ -617,9 +719,7 @@ ipcMain.handle('cmd:exec', async (_event, command, cwd) => {
     return { ok: false, error: 'Command rejected: cwd outside project root' };
   }
   return new Promise((resolve) => {
-    // Windows requires shell: true to execute batch scripts like npm.cmd
-    const isWindows = process.platform === 'win32';
-    const child = spawn(exe, args, { cwd: effectiveCwd, timeout: 30000, shell: isWindows });
+    const child = spawn(finalExe, args, { cwd: effectiveCwd, timeout: 30000, shell: false });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', d => { stdout += d.toString(); });
