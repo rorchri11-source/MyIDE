@@ -280,6 +280,8 @@ function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
         let lineStart = 0;
         let errorBody = '';
 
+        let inThinking = false;
+
         res.on('data', (chunk) => {
           if (res.statusCode < 200 || res.statusCode >= 300) {
             errorBody += chunk;
@@ -297,10 +299,30 @@ function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
               const data = line.replace(/^data:\s*/, '');
               if (data === '[DONE]' || !data) continue;
               try {
-                const delta = JSON.parse(data).choices?.[0]?.delta?.content;
+                const parsed = JSON.parse(data);
+                const delta = parsed.choices?.[0]?.delta;
                 if (delta) {
-                  fullContent += delta;
-                  onSseChunk(delta, fullContent);
+                  let chunkContent = '';
+                  // Wrap reasoning_content in <thinking> tags if provided
+                  if (delta.reasoning_content) {
+                    chunkContent = delta.reasoning_content;
+                    if (!inThinking) {
+                      inThinking = true;
+                      chunkContent = '<thinking>\n' + chunkContent;
+                    }
+                  } else if (delta.content != null) {
+                    if (inThinking) {
+                      inThinking = false;
+                      chunkContent = '\n</thinking>\n' + delta.content;
+                    } else {
+                      chunkContent = delta.content;
+                    }
+                  }
+
+                  if (chunkContent) {
+                    fullContent += chunkContent;
+                    onSseChunk(chunkContent, fullContent);
+                  }
                 }
               } catch (e) {
                 // Non-JSON SSE lines — skip
@@ -320,10 +342,29 @@ function makeRequest(client, url, isHttps, body, authHeader, onSseChunk) {
               const data = lastLine.replace(/^data:\s*/, '');
               if (data !== '[DONE]' && data) {
                 try {
-                  const delta = JSON.parse(data).choices?.[0]?.delta?.content;
+                  const parsed = JSON.parse(data);
+                  const delta = parsed.choices?.[0]?.delta;
                   if (delta) {
-                    fullContent += delta;
-                    onSseChunk(delta, fullContent);
+                    let chunkContent = '';
+                    if (delta.reasoning_content) {
+                      if (!inThinking) {
+                        inThinking = true;
+                        chunkContent = '<thinking>\n' + delta.reasoning_content;
+                      } else {
+                        chunkContent = delta.reasoning_content;
+                      }
+                    } else if (delta.content != null) {
+                      if (inThinking) {
+                        inThinking = false;
+                        chunkContent = '\n</thinking>\n' + delta.content;
+                      } else {
+                        chunkContent = delta.content;
+                      }
+                    }
+                    if (chunkContent) {
+                      fullContent += chunkContent;
+                      onSseChunk(chunkContent, fullContent);
+                    }
                   }
                 } catch (e) { /* skip */ }
               }
@@ -424,7 +465,14 @@ ipcMain.handle('ai:sendWithTools', async (event, { config, messages, tools }) =>
       const parsed = JSON.parse(res.body);
       const choice = parsed.choices?.[0];
       if (choice?.message) {
-        const resp = { content: choice.message.content || '' };
+        let textContent = choice.message.content || '';
+
+        // Wrap reasoning_content in <thinking> for non-streaming too
+        if (choice.message.reasoning_content) {
+           textContent = `<thinking>\n${choice.message.reasoning_content}\n</thinking>\n${textContent}`;
+        }
+
+        const resp = { content: textContent };
         if (choice.message.tool_calls) {
           resp.tool_calls = choice.message.tool_calls;
         }
@@ -637,7 +685,9 @@ ipcMain.handle('cmd:exec', async (_event, command, cwd) => {
     return { ok: false, error: 'Command rejected: cwd outside project root' };
   }
   return new Promise((resolve) => {
-    const child = spawn(exe, args, { cwd: effectiveCwd, timeout: 30000, shell: false });
+    // Windows requires shell: true to execute batch scripts like npm.cmd
+    const isWindows = process.platform === 'win32';
+    const child = spawn(exe, args, { cwd: effectiveCwd, timeout: 30000, shell: isWindows });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', d => { stdout += d.toString(); });
