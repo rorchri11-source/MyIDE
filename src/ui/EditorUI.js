@@ -84,6 +84,8 @@ export default class EditorUI {
 
   closeTab(filePath) {
     delete this.openTabs[filePath];
+    this.renderTabs();
+
     if (this.currentFile === filePath) {
       this.currentFile = null;
       this.activeTab = null;
@@ -99,8 +101,11 @@ export default class EditorUI {
       if (this.fileInfoEl) this.fileInfoEl.textContent = '';
       return;
     }
-    this.renderTabs();
-    if (this.fileInfoEl) this.fileInfoEl.textContent = '';
+
+    // If we closed a background tab, and it wasn't the active one,
+    // the active tab's fileInfoEl shouldn't be cleared, but it was being cleared previously.
+    // The previous code did: `if (this.fileInfoEl) this.fileInfoEl.textContent = '';`
+    // which was wrong, it cleared info of the STILL ACTIVE tab.
   }
 
   renderTabs() {

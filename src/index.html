@@ -93,7 +93,7 @@
 
     <!-- Token Info Panel -->
     <div id="token-panel" class="modal hidden">
-      <div style="max-width:420px;max-height:70vh;overflow-y:auto;background:var(--panel-bg);border:var(--border);border-radius:var(--radius);padding:20px;">
+      <div style="max-width:420px;max-height:70vh;overflow-y:auto;background:var(--bg-secondary);border:var(--border);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow-lg);animation:modalSlideIn 0.25s ease;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
           <h3 style="margin:0;font-size:15px;">Token Usage</h3>
           <button id="btn-close-token-panel" class="btn-small">x</button>
@@ -104,7 +104,7 @@
 
     <!-- Help / Onboarding -->
     <div id="help-modal" class="modal hidden" style="display:flex;align-items:center;justify-content:center;">
-      <div style="max-width:620px;max-height:80vh;overflow-y:auto;background:var(--panel-bg);border:var(--border);border-radius:var(--radius);padding:24px;">
+      <div style="max-width:620px;max-height:80vh;overflow-y:auto;background:var(--bg-secondary);border:var(--border);border-radius:var(--radius);padding:24px;box-shadow:var(--shadow-lg);animation:modalSlideIn 0.25s ease;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
           <h2 style="margin:0;font-size:18px;">MyIDE — Guida Rapida</h2>
           <button id="btn-close-help" class="btn-small">x</button>
@@ -160,14 +160,14 @@
         <div id="tab-preferences" class="settings-tab-content">
           <div class="form-group">
             <label>Default Mode</label>
-            <select id="pref-default-mode">
+            <select id="pref-default-mode" class="select-dark">
               <option value="chat">Chat</option>
               <option value="edit">Edit</option>
             </select>
           </div>
           <div class="form-group">
             <label>Auto-apply file changes</label>
-            <select id="pref-auto-apply">
+            <select id="pref-auto-apply" class="select-dark">
               <option value="ask">Ask before applying</option>
               <option value="auto">Auto-apply</option>
             </select>
@@ -186,7 +186,7 @@
         <input type="hidden" id="provider-edit-id">
         <div class="form-group">
           <label for="cfg-template">Template</label>
-          <select id="cfg-template" class="input-dark" style="background: var(--panel-bg); border: var(--border); border-radius: var(--radius); color: var(--text);">
+          <select id="cfg-template" class="select-dark" style="width: 100%;">
             <option value="">-- Blank (Manual) --</option>
             <option value="openrouter">OpenRouter</option>
             <option value="google-ai-studio">Google AI Studio</option>
@@ -241,7 +241,7 @@
 
     <!-- Effort / Prompt Custom Editor -->
     <div id="effort-editor-modal" class="modal hidden">
-      <div style="max-width:700px;max-height:85vh;overflow-y:auto;background:var(--panel-bg);border:var(--border);border-radius:var(--radius);padding:20px;">
+      <div style="max-width:700px;max-height:85vh;overflow-y:auto;background:var(--bg-secondary);border:var(--border);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow-lg);animation:modalSlideIn 0.25s ease;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
           <h3 style="margin:0;font-size:16px;">Effort Prompt Editor</h3>
           <button id="btn-close-effort-editor" class="btn-small">x</button>
@@ -251,13 +251,13 @@
         </p>
         <div class="form-group">
           <label>Preset Template</label>
-          <select id="effort-preset-select" class="input-dark" style="width:100%;background:var(--panel-bg);border:var(--border);border-radius:var(--radius);color:var(--text);padding:8px;">
-            <option value="off">🚫 No Reasoning (for models without reasoning)</option>
-            <option value="low">⚡ Quick (Low Effort)</option>
-            <option value="medium" selected>⚖️ Balanced (Medium Effort)</option>
-            <option value="high">🔍 Deep (High Effort)</option>
-            <option value="max">🧠 Maximum (Max Effort)</option>
-            <option value="custom">✏️ Custom...</option>
+          <select id="effort-preset-select" class="select-dark" style="width: 100%;">
+            <option value="off">🚫 Nessun Ragionamento (modelli senza reasoning)</option>
+            <option value="low">⚡ Rapido (Low Effort)</option>
+            <option value="medium" selected>⚖️ Bilanciato (Medium Effort)</option>
+            <option value="high">🔍 Approfondito (High Effort)</option>
+            <option value="max">🧠 Massimo (Max Effort)</option>
+            <option value="custom">✏️ Personalizzato...</option>
           </select>
         </div>
         <div class="form-group">

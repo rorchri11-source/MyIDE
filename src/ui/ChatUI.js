@@ -344,6 +344,8 @@ export default class ChatUI {
     this.messagesEl.appendChild(typingEl);
     typingEl.scrollIntoView({ behavior: 'smooth' });
 
+    let assistantEl = null;
+
     try {
       await this.ensureClient();
 
@@ -384,7 +386,7 @@ export default class ChatUI {
 
       // Remove typing indicator and add real message
       typingEl.remove();
-      const assistantEl = this.addMessage('assistant', '');
+      assistantEl = this.addMessage('assistant', '');
       assistantEl.style.border = '1px solid rgba(129, 140, 248, 0.15)';
       let accumulatedText = '';
 
@@ -400,32 +402,43 @@ export default class ChatUI {
 
       if (this.modeManager && !this.modeManager.validateReasoning(finalResponse)) {
         assistantEl.remove();
-        this.chatHistory.pop(); // rimuovi risposta senza reasoning
 
         while (reasoningRetries < maxRetries) {
           reasoningRetries++;
           this.setLoading(true, `🔄 Missing reasoning — resending (${reasoningRetries}/${maxRetries})...`);
 
-          // Add correction message to history
           const correction = this.modeManager.buildReasoningCorrection();
-          this.chatHistory.push(correction);
+          const retryMessages = [
+            ...messages,
+            { role: 'assistant', content: finalResponse },
+            correction
+          ];
 
-          const retryMessages = [...messages, ...this.chatHistory];
+          const retryAssistantEl = this.addMessage('assistant', '');
+          retryAssistantEl.style.border = '1px solid rgba(129, 140, 248, 0.15)';
+
           const retryResult = await this.client.send(retryMessages, (chunk, full) => {
             accumulatedText = full;
-            this.updateMessageStreaming(assistantEl, full);
+            this.updateMessageStreaming(retryAssistantEl, full);
           });
 
           finalResponse = retryResult || accumulatedText;
 
           if (this.modeManager.validateReasoning(finalResponse)) {
+            assistantEl = retryAssistantEl;
             break; // Reasoning OK, esci dal loop
           }
 
           // Se ancora non ha reasoning, rimuovi e riprova
-          assistantEl.remove();
-          this.chatHistory.pop(); // rimuovi correzione
-          this.chatHistory.pop(); // rimuovi risposta senza reasoning
+          retryAssistantEl.remove();
+        }
+
+        // Se alla fine ha fallito tutte le retry e assistantEl è stato rimosso,
+        // creane uno nuovo per mostrare comunque l'ultima risposta (anche se senza reasoning).
+        if (!this.modeManager.validateReasoning(finalResponse)) {
+           assistantEl = this.addMessage('assistant', '');
+           assistantEl.style.border = '1px solid rgba(129, 140, 248, 0.15)';
+           this.updateMessageStreaming(assistantEl, finalResponse);
         }
       }
 
@@ -448,7 +461,7 @@ export default class ChatUI {
       await this.detectAndCreateFiles(finalResponse);
 
     } catch (error) {
-      typingEl.remove();
+      if (typingEl && typingEl.parentNode) typingEl.remove();
       if (assistantEl && !assistantEl.textContent.trim()) {
         assistantEl.remove();
       }
