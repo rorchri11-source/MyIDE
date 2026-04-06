@@ -165,6 +165,13 @@ ipcMain.handle('settings:load', async () => {
       return JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
     } catch (e) {
       console.error('[Settings] Error parsing settings.json:', e);
+      try {
+        const backupPath = settingsPath + '.bak.' + Date.now();
+        fs.renameSync(settingsPath, backupPath);
+        console.error('[Settings] Backed up malformed settings.json to:', backupPath);
+      } catch (backupErr) {
+        console.error('[Settings] Failed to back up malformed settings.json:', backupErr);
+      }
       // Fall through to return default object so the frontend does not crash
     }
   }
