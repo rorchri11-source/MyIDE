@@ -125,7 +125,11 @@ class App {
               const statusEl = document.getElementById('status-text');
               if (statusEl) statusEl.textContent = `Error: ${exists.error}`;
             }
-          } catch (e) { console.error(e); }
+          } catch (e) {
+            console.error(e);
+            const statusEl = document.getElementById('status-text');
+            if (statusEl) statusEl.textContent = 'Error: ' + e.message;
+          }
         }
       });
 
@@ -220,7 +224,11 @@ class App {
         // Sync the template dropdown since ModeManager resets the template on mode switch
         const tmplSelect = document.getElementById('template-select');
         if (tmplSelect) tmplSelect.value = 'none';
-      } catch (e) { console.error(e); }
+      } catch (e) {
+        console.error(e);
+        const statusEl = document.getElementById('status-text');
+        if (statusEl) statusEl.textContent = 'Error: ' + e.message;
+      }
     });
 
     setListener('template-select', 'change', (e) => {
@@ -584,7 +592,11 @@ class App {
           modal.classList.add('hidden');
           if (this.chat) this.chat.resetClient();
         }
-      } catch (e) { console.error(e); }
+      } catch (e) {
+        console.error(e);
+        const statusEl = document.getElementById('status-text');
+        if (statusEl) statusEl.textContent = 'Error: ' + e.message;
+      }
     });
 
     // Template auto-fill
@@ -665,7 +677,11 @@ class App {
       if (Object.keys(providers).length === 0) {
         listEl.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-muted)">No providers. Click "+ Add Provider".</div>';
       }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      const statusEl = document.getElementById('status-text');
+      if (statusEl) statusEl.textContent = 'Error: ' + e.message;
+    }
   }
 
   editProvider(id) {
@@ -688,7 +704,11 @@ class App {
       document.getElementById('cfg-thinking-budget').value = provider.thinkingBudget ?? 16384;
       document.getElementById('btn-delete-provider').classList.remove('hidden');
       document.getElementById('provider-modal').classList.remove('hidden');
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      const statusEl = document.getElementById('status-text');
+      if (statusEl) statusEl.textContent = 'Error: ' + e.message;
+    }
   }
 
   updateProviderSelect() {
@@ -709,7 +729,11 @@ class App {
         const modelEl = document.getElementById('model-input');
         if (modelEl) modelEl.value = providers[activeId].model || '';
       }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      const statusEl = document.getElementById('status-text');
+      if (statusEl) statusEl.textContent = 'Error: ' + e.message;
+    }
   }
 
   updateModeSelect() {

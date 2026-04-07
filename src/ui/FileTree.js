@@ -28,6 +28,9 @@ export default class FileTree {
         return a.name.localeCompare(b.name);
       });
       this.render();
+    } else {
+      const statusEl = document.getElementById('status-text');
+      if (statusEl) statusEl.textContent = `Error: ${result.error}`;
     }
   }
 
@@ -69,6 +72,8 @@ export default class FileTree {
               });
             } else {
               item.children = [];
+              const statusEl = document.getElementById('status-text');
+              if (statusEl) statusEl.textContent = `Error: ${result.error}`;
             }
           }
           this.render();
