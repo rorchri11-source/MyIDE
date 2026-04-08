@@ -152,9 +152,10 @@ export default class TerminalUI {
 
     try {
       const result = await window.api.execCommand(command, this.cwd || null);
+      if (result.error) this.appendLine(`Error: ${result.error}`, 'error');
       if (result.stdout) this.appendLine(result.stdout, 'output');
       if (result.stderr) this.appendLine(result.stderr, 'error');
-      if (!result.ok && !result.stdout && !result.stderr) {
+      if (!result.ok && !result.stdout && !result.stderr && !result.error) {
         this.appendLine(`Command exited with code ${result.exitCode}`, 'error');
       }
     } catch (error) {
