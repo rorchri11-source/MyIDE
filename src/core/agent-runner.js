@@ -326,6 +326,9 @@ ${toolsHint}
       }
       case 'cmd_run': {
         const result = await window.api.execCommand(args.command, args.cwd);
+        if (result.error) {
+          return { error: result.error };
+        }
         const output = [result.stdout, result.stderr].filter(Boolean).join('\n') || '(no output)';
         const MAX_OUTPUT = 200000;
         const truncated = output.length > MAX_OUTPUT
@@ -342,6 +345,9 @@ ${toolsHint}
         // Using ripgrep or grep recursively, ignoring node_modules and .git
         const cmd = `grep -rnIE --exclude-dir=node_modules --exclude-dir=.git -e '${escapedPattern}' .`;
         const result = await window.api.execCommand(cmd, cwd);
+        if (result.error) {
+          return { error: result.error };
+        }
         const output = [result.stdout, result.stderr].filter(Boolean).join('\n') || '(no matches found)';
         const MAX_OUTPUT = 100000;
         const truncated = output.length > MAX_OUTPUT
