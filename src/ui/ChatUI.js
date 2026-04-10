@@ -640,7 +640,7 @@ export default class ChatUI {
           }
           for (const tc of msg.tool_calls) {
              let args;
-             try { args = JSON.parse(tc.function.arguments); } catch (e) { args = tc.function.arguments; }
+             try { args = JSON.parse(tc.function.arguments); } catch (e) { args = {}; }
              this.addToolCallMessage(tc.function.name, args);
           }
           continue;
